@@ -8,7 +8,7 @@
 typedef std::vector<float> Vec1D;
 typedef std::vector<std::vector<float>> Vec2D;
 typedef std::vector<int> DimVec;
-typedef std::function<float(float, float)> OperationFc;
+typedef std::function<float(float, float)> OperationFunc;
 typedef std::function<void(float*, float*, float*, int, int, int)> MatmulFunc;
 
 inline float add(float a, float b) { return a + b; }
@@ -28,14 +28,12 @@ class Tensor {
     void check_same_shape(Tensor& other, bool allow_scalar = true);
     DimVec get_short_shape();
 
-    void _matmul_deep(Tensor& other, float* res, MatmulFunc matmul_func);
+    void _matmul_deep(Tensor& other, float* res, MatmulFunc matmul_fn);
 
   public:
     Vec1D data;
     std::vector<int> shape;
     DimVec dshape;
-    int dim; // TODO: remove
-
     Device device;
 
     bool require_grad;
@@ -58,7 +56,7 @@ class Tensor {
     ~Tensor();
 
     Tensor apply(std::function<float(float)> function);
-    Tensor apply_operator(Tensor& other, OperationFc operation_fn);
+    Tensor apply_operator(Tensor& other, OperationFunc operation_fn);
 
     Vec1D get_row(int row_num);
     Vec1D get_col(int row_num);
@@ -125,23 +123,6 @@ class Tensor {
     void backward();
 
     std::string to_string();
-};
-
-void print_vector(std::vector<float>);
-
-// TODO: remove
-class Tensor1D : public Tensor {
-    using Tensor::Tensor;
-
-  public:
-    Vec1D get_tensor();
-};
-
-class Tensor2D : public Tensor {
-    using Tensor::Tensor;
-
-  public:
-    Vec2D get_tensor();
 };
 
 #endif

@@ -5,4 +5,3 @@
 #include <stdio.h>
 
 void matmul_cuda(float* a, float* other, float* res, int ah, int aw, int bw);
-//void _matmul(float* a, float* other, float* res, int tof, int oof);

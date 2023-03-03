@@ -4,18 +4,20 @@ project(lightflow VERSION 1.0.0 DESCRIPTION "Lightweight DL framework")
 
 include(CTest)
 include(GNUInstallDirs)
+include(CheckLanguage)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -Ofast -fopenmp")
 add_compile_options(-Wall -Werror)
 
-find_package(CUDA)
-include_directories("${CUDA_INCLUDE_DIRS}")
-set(CUDA_NVCC_FLAGS "--compiler-options -fPIC")
-cuda_compile(CUDA_O src/accel/cuda.cu)
-if(CUDA_O)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -lcudart")
-endif(CUDA_O)
+check_language(CUDA)
+if (CMAKE_CUDA_COMPILER)
+    find_package(CUDA)
+    include_directories("${CUDA_INCLUDE_DIRS}")
+    set(CUDA_NVCC_FLAGS "--compiler-options -fPIC")
+    cuda_compile(CUDA_O src/accel/cuda.cu)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DLF_CUDA_AVAIL -lcudart")
+endif()
 
 set(lightflow_src
     src/config.cc

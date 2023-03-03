@@ -11,11 +11,14 @@
 #include "diff.h"
 #include "utility.ipp"
 
+#include "accel/cpu.cc"
+
 #ifndef LF_NO_AVX
 #include "accel/avx.cc"
 #endif
-#include "accel/cpu.cc"
+#ifdef LF_CUDA_AVAIL
 #include "accel/cuda.cuh"
+#endif
 
 using namespace std::placeholders;
 
@@ -36,11 +39,11 @@ DimVec Tensor::normalize_shape(DimVec shape) {
     if (shape.size() > 4) {
         throw std::runtime_error("5 dimensional or higher tensor are not supported");
     }
+
     DimVec nshape = DimVec(4 - shape.size(), 1);
     for (std::size_t i = 0; i < shape.size(); i++) {
         nshape.push_back(shape[i]);
     }
-
     return nshape;
 }
 
@@ -51,7 +54,6 @@ std::size_t Tensor::size() {
 Tensor::Tensor(const std::vector<int>& shape, bool require_grad, Device device) {
     this->shape = normalize_shape(shape);
     this->dshape = {this->shape[2], this->shape[3]};
-    this->dim = get_short_shape().size();
     this->data = Vec1D(this->size());
     this->device = device;
 
@@ -65,7 +67,6 @@ Tensor::Tensor(const std::vector<int>& shape, const Vec1D tensor, std::vector<Te
                Device device) {
     this->shape = normalize_shape(shape);
     this->dshape = {this->shape[2], this->shape[3]};
-    this->dim = get_short_shape().size();
     this->device = device;
 
     this->require_grad = require_grad;
@@ -81,7 +82,6 @@ Tensor::Tensor(const std::vector<int>& shape, const Vec2D tensor, std::vector<Te
                Device device) {
     this->shape = normalize_shape(shape);
     this->dshape = {this->shape[2], this->shape[3]};
-    this->dim = get_short_shape().size();
     this->device = device;
 
     this->require_grad = require_grad;
@@ -97,7 +97,6 @@ Tensor::Tensor(const std::vector<int>& shape, const float constant, std::vector<
                Device device) {
     this->shape = normalize_shape(shape);
     this->dshape = {this->shape[2], this->shape[3]};
-    this->dim = get_short_shape().size();
     this->device = device;
 
     this->require_grad = require_grad;
@@ -197,7 +196,7 @@ Tensor Tensor::apply(std::function<float(float)> function) {
     return Tensor(this->shape, res_data, {}, this->require_grad);
 }
 
-Tensor Tensor::apply_operator(Tensor& other, OperationFc operation_fn) {
+Tensor Tensor::apply_operator(Tensor& other, OperationFunc operation_fn) {
     DimVec res_shape = this->shape;
 
     DimVec t_short_shape = this->get_short_shape();
@@ -401,13 +400,15 @@ Tensor Tensor::matmul(Tensor& other) {
     DimVec res_dim = {this->shape[0], this->shape[1], this->dshape[0], other.dshape[1]};
     Vec1D res_data(this->shape[0] * this->shape[1] * this->dshape[0] * other.dshape[1], 0.0f);
 
-    MatmulFunc mm_fn;
+    MatmulFunc mm_fn = std::bind(matmul_cpu, _1, _2, _3, _4, _5, _6);
     if (this->device == Device::CUDA) {
+#ifdef LF_CUDA_AVAIL
         mm_fn = std::bind(matmul_cuda, _1, _2, _3, _4, _5, _6);
-    } else {
-#ifdef LF_NO_AVX
-        mm_fn = std::bind(matmul_cpu, _1, _2, _3, _4, _5, _6);
 #else
+        std::cerr << "CUDA not available" << std::endl;
+#endif
+    } else {
+#ifndef LF_NO_AVX
         mm_fn = std::bind(matmul_avx, _1, _2, _3, _4, _5, _6);
 #endif
     }
@@ -636,6 +637,7 @@ Tensor Tensor::rot180() {
 }
 
 Tensor Tensor::to(Device device) {
+    // TODO: move the data
     this->device = device;
     return *this;
 }
@@ -645,7 +647,7 @@ void Tensor::backward() {
         this->backward_fn();
     }
 
-    for (std::vector<Tensor*>::iterator it = this->children.begin(), end = this->children.end(); it != end; it++) {
+    for (std::vector<Tensor*>::iterator it = this->children.begin(); it != this->children.end(); it++) {
         (*it)->backward();
     }
 }
