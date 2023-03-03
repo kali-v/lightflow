@@ -2,7 +2,7 @@ function test {
 	rm -rf build/test
 	mkdir -p build/test
 	cd build
-	cmake -DCMAKE_INSTALL_PREFIX=local -DCMAKE_CXX_FLAGS=$1 ..
+	cmake -DCMAKE_INSTALL_PREFIX=local -DCMAKE_CXX_FLAGS="$@" ..
 	make install
 	cd ..
 
@@ -15,5 +15,6 @@ function test {
 }
 
 set -e
-test ''
-test '-DAVX'
+rm -rf build
+echo "$@"
+test "$@"

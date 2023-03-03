@@ -9,6 +9,7 @@ typedef std::vector<float> Vec1D;
 typedef std::vector<std::vector<float>> Vec2D;
 typedef std::vector<int> DimVec;
 typedef std::function<float(float, float)> OperationFc;
+typedef std::function<void(float*, float*, float*, int, int, int)> MatmulFunc;
 
 inline float add(float a, float b) { return a + b; }
 
@@ -18,21 +19,24 @@ inline float mul(float a, float b) { return a * b; }
 
 inline float ddiv(float a, float b) { return a / b; }
 
+enum class Device { CPU = 0, CUDA = 1 };
+const Device defdev = getenv("LF_DEFDEV") ? static_cast<Device>(atoi(getenv("LF_DEFDEV"))) : Device::CPU;
+
 class Tensor {
   private:
     std::size_t size();
     void check_same_shape(Tensor& other, bool allow_scalar = true);
     DimVec get_short_shape();
 
-    void _matmul_deep(Tensor& other, float* res, std::function<void(Tensor&, float*, int, int)>);
-    void _matmul_avx(Tensor& other, float* res, int tof = 0, int oof = 0);
-    void _matmul(Tensor& other, float* res, int tof = 0, int oof = 0);
+    void _matmul_deep(Tensor& other, float* res, MatmulFunc matmul_func);
 
   public:
-    int dim;
-    DimVec dshape;
-    std::vector<int> shape;
     Vec1D data;
+    std::vector<int> shape;
+    DimVec dshape;
+    int dim; // TODO: remove
+
+    Device device;
 
     bool require_grad;
     Tensor* grad = nullptr;
@@ -40,16 +44,16 @@ class Tensor {
     std::function<void()> backward_fn;
     std::vector<Tensor*> children;
 
-    Tensor(const std::vector<int>& shape, bool require_grad = false);
+    Tensor(const std::vector<int>& shape, bool require_grad = false, Device device = defdev);
 
     Tensor(const std::vector<int>& shape, const Vec1D tensor, std::vector<Tensor*> children = {},
-           bool require_grad = false);
+           bool require_grad = false, Device device = defdev);
 
     Tensor(const std::vector<int>& shape, const Vec2D tensor, std::vector<Tensor*> children = {},
-           bool require_grad = false);
+           bool require_grad = false, Device device = defdev);
 
     Tensor(const std::vector<int>& shape, const float constant, std::vector<Tensor*> children = {},
-           bool require_grad = false);
+           bool require_grad = false, Device device = defdev);
 
     ~Tensor();
 
@@ -60,7 +64,7 @@ class Tensor {
     Vec1D get_col(int row_num);
     Tensor get_block(int n);
     Tensor get_channel(int channel);
-    Tensor add_channel(Tensor& channel);
+    void add_channel(Tensor& channel);
 
     static DimVec normalize_shape(DimVec shape);
 
@@ -116,6 +120,8 @@ class Tensor {
 
     bool has_same_shape(Tensor& other);
 
+    Tensor to(Device device);
+
     void backward();
 
     std::string to_string();
@@ -123,6 +129,7 @@ class Tensor {
 
 void print_vector(std::vector<float>);
 
+// TODO: remove
 class Tensor1D : public Tensor {
     using Tensor::Tensor;
 

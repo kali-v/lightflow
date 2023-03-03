@@ -11,7 +11,7 @@ jobs:
       - name: install gtest
         run: git clone https://github.com/google/googletest.git && cd googletest && mkdir build && cd build && cmake .. && sudo make install
       - name: test cpu
-        run: ./run_tests.sh
+        run: LF_DEFDEV=0 ./run_tests.sh -DLF_NO_AVX
 
   test_avx:
     runs-on: ubuntu-latest
@@ -21,4 +21,14 @@ jobs:
       - name: install gtest
         run: git clone https://github.com/google/googletest.git && cd googletest && mkdir build && cd build && cmake .. && sudo make install
       - name: test avx
-        run: ./run_tests.sh -DAVX
+        run: LF_DEFDEV=0 ./run_tests.sh
+
+  test_cuda:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: install gtest
+        run: git clone https://github.com/google/googletest.git && cd googletest && mkdir build && cd build && cmake .. && sudo make install
+      - name: test avx
+        run: LF_DEFDEV=1 ./run_tests.sh

@@ -11,6 +11,12 @@
 #include "diff.h"
 #include "utility.ipp"
 
+#ifndef LF_NO_AVX
+#include "accel/avx.cc"
+#endif
+#include "accel/cpu.cc"
+#include "accel/cuda.cuh"
+
 using namespace std::placeholders;
 
 float EQ_TRESHOLD = 1e-4;
@@ -42,10 +48,12 @@ std::size_t Tensor::size() {
     return std::accumulate(this->shape.begin(), this->shape.end(), 1, std::multiplies<float>());
 }
 
-Tensor::Tensor(const std::vector<int>& shape, bool require_grad) {
+Tensor::Tensor(const std::vector<int>& shape, bool require_grad, Device device) {
     this->shape = normalize_shape(shape);
     this->dshape = {this->shape[2], this->shape[3]};
     this->dim = get_short_shape().size();
+    this->data = Vec1D(this->size());
+    this->device = device;
 
     this->require_grad = require_grad;
     if (require_grad) {
@@ -53,24 +61,12 @@ Tensor::Tensor(const std::vector<int>& shape, bool require_grad) {
     }
 }
 
-Tensor::Tensor(const std::vector<int>& shape, const Vec1D tensor, std::vector<Tensor*> children, bool require_grad) {
+Tensor::Tensor(const std::vector<int>& shape, const Vec1D tensor, std::vector<Tensor*> children, bool require_grad,
+               Device device) {
     this->shape = normalize_shape(shape);
     this->dshape = {this->shape[2], this->shape[3]};
     this->dim = get_short_shape().size();
-
-    this->require_grad = require_grad;
-    if (require_grad) {
-        this->grad = new Tensor(shape, 0.0f, {}, false);
-        this->children = children;
-    }
-
-    fill(tensor);
-}
-
-Tensor::Tensor(const std::vector<int>& shape, const Vec2D tensor, std::vector<Tensor*> children, bool require_grad) {
-    this->shape = normalize_shape(shape);
-    this->dshape = {this->shape[2], this->shape[3]};
-    this->dim = get_short_shape().size();
+    this->device = device;
 
     this->require_grad = require_grad;
     if (require_grad) {
@@ -81,10 +77,28 @@ Tensor::Tensor(const std::vector<int>& shape, const Vec2D tensor, std::vector<Te
     fill(tensor);
 }
 
-Tensor::Tensor(const std::vector<int>& shape, const float constant, std::vector<Tensor*> children, bool require_grad) {
+Tensor::Tensor(const std::vector<int>& shape, const Vec2D tensor, std::vector<Tensor*> children, bool require_grad,
+               Device device) {
     this->shape = normalize_shape(shape);
     this->dshape = {this->shape[2], this->shape[3]};
     this->dim = get_short_shape().size();
+    this->device = device;
+
+    this->require_grad = require_grad;
+    if (require_grad) {
+        this->grad = new Tensor(shape, 0.0f, {}, false);
+        this->children = children;
+    }
+
+    fill(tensor);
+}
+
+Tensor::Tensor(const std::vector<int>& shape, const float constant, std::vector<Tensor*> children, bool require_grad,
+               Device device) {
+    this->shape = normalize_shape(shape);
+    this->dshape = {this->shape[2], this->shape[3]};
+    this->dim = get_short_shape().size();
+    this->device = device;
 
     this->require_grad = require_grad;
     if (require_grad) {
@@ -230,11 +244,8 @@ Tensor Tensor::operator+(float value) {
 
 Tensor Tensor::operator+(Tensor& other) {
     Tensor out = apply_operator(other, add);
-
-    if (out.require_grad) {
+    if (out.require_grad)
         out.backward_fn = add_backward(this, &other, &out);
-    }
-
     return out;
 }
 
@@ -247,27 +258,21 @@ Tensor Tensor::operator-(float value) {
 
 Tensor Tensor::operator-(Tensor& other) {
     Tensor out = apply_operator(other, sub);
-
-    if (out.require_grad) {
+    if (out.require_grad)
         out.backward_fn = sub_backward(this, &other, &out);
-    }
-
     return out;
 }
 
 Tensor Tensor::operator*(float value) {
     Vec1D nd = this->data;
     std::transform(nd.begin(), nd.end(), nd.begin(), [value](float& c) { return c * value; });
-
     return Tensor(this->shape, nd);
 }
 
 Tensor Tensor::operator*(Tensor& other) {
     Tensor out = apply_operator(other, mul);
-    if (out.require_grad) {
+    if (out.require_grad)
         out.backward_fn = mul_backward(this, &other, &out);
-    }
-
     return out;
 }
 
@@ -280,10 +285,8 @@ Tensor Tensor::operator/(float value) {
 
 Tensor Tensor::operator/(Tensor& other) {
     Tensor out = apply_operator(other, ddiv);
-    if (out.require_grad) {
+    if (out.require_grad)
         out.backward_fn = ddiv_backward(this, &other, &out);
-    }
-
     return out;
 }
 
@@ -299,10 +302,8 @@ Tensor Tensor::pow(Tensor& exp) {
     std::transform(nd.begin(), nd.end(), nd.begin(), [iexp](float& c) { return std::pow(c, iexp); });
 
     Tensor out = Tensor(this->shape, nd, {this, &exp}, exp.require_grad);
-    if (out.require_grad) {
+    if (out.require_grad)
         out.backward_fn = pow_backward(this, &exp, &out);
-    }
-
     return out;
 }
 
@@ -321,14 +322,12 @@ void Tensor::operator-=(Tensor other) {
 }
 
 bool Tensor::operator==(Tensor& other) {
-    if (!has_same_shape(other)) {
+    if (!has_same_shape(other))
         return false;
-    }
 
     for (std::size_t i = 0; i < this->data.size(); i++) {
-        if (fabs(this->data[i] - other.data[i]) > EQ_TRESHOLD) {
+        if (fabs(this->data[i] - other.data[i]) > EQ_TRESHOLD)
             return false;
-        }
     }
     return true;
 }
@@ -372,68 +371,7 @@ float Tensor::min() { return *std::min_element(std::begin(this->data), std::end(
 
 float Tensor::sum() { return std::reduce(this->data.begin(), this->data.end()); }
 
-#ifdef AVX
-#include <immintrin.h>
-
-void Tensor::_matmul(Tensor& other, float* res, int tof, int oof) {
-    int theight = this->dshape[0];
-    int owidth = other.dshape[1];
-    int twidth = this->dshape[1];
-
-    const int BSB = 64;
-    const int BSA = 4;
-
-    for (int bb = 0; bb < theight; bb += BSB) {
-        float bbm = std::min(bb + BSB, theight);
-        for (int ba = 0; ba < twidth; ba += BSA) {
-            float bam = std::min(ba + BSA, twidth);
-            for (int i = bb; i < bbm; i++) {
-                for (int j = ba; j < bam; j++) {
-                    __m256 vec_a = _mm256_set1_ps(this->data[i * twidth + j]);
-
-                    int k;
-                    for (k = 0; k <= owidth - 8; k += 8) {
-                        _mm256_storeu_ps(&res[i * owidth + k],
-                                         _mm256_fmadd_ps(vec_a, _mm256_loadu_ps(&other.data[j * owidth + k]),
-                                                         _mm256_loadu_ps(&res[i * owidth + k])));
-                    }
-
-                    // compute exceding elements
-                    for (int q = 0; q + k < owidth; q++) {
-                        res[i * owidth + k + q] +=
-                            this->data[tof + i * twidth + j] * other.data[oof + j * owidth + k + q];
-                    }
-                }
-            }
-        }
-    }
-}
-#else
-
-void Tensor::_matmul(Tensor& other, float* res, int tof, int oof) {
-    int theight = this->dshape[0];
-    int owidth = other.dshape[1];
-    int twidth = this->dshape[1];
-
-    int bs = (twidth < 64) ? twidth : (twidth < 256) ? 64 : 256;
-    int bss = (owidth < 64) ? owidth : (owidth < 256) ? 64 : 256;
-
-    for (int ba = 0; ba < twidth; ba += bs) {
-        for (int bb = 0; bb < owidth; bb += bss) {
-            for (int i = 0; i < theight; i++) {
-                for (int k = ba; k < std::min(ba + bs, twidth); k++) {
-                    for (int j = bb; j < std::min(bb + bss, owidth); j++) {
-                        res[i * owidth + j] += this->data[tof + i * twidth + k] * other.data[oof + k * owidth + j];
-                    }
-                }
-            }
-        }
-    }
-}
-
-#endif
-
-void Tensor::_matmul_deep(Tensor& other, float* res, std::function<void(Tensor&, float*, int, int)> mm) {
+void Tensor::_matmul_deep(Tensor& other, float* res, MatmulFunc mm) {
     int theight = this->dshape[0];
     int owidth = other.dshape[1];
     int twidth = this->dshape[1];
@@ -445,7 +383,7 @@ void Tensor::_matmul_deep(Tensor& other, float* res, std::function<void(Tensor&,
             int tof = b0 * this->shape[1] * theight * twidth + b1 * theight * twidth;
             int oof = b0 * other.shape[1] * owidth * oheight + b1 * owidth * oheight;
 
-            mm(other, &res[i], tof, oof);
+            mm(&this->data[tof], &other.data[oof], &res[i], this->dshape[0], this->dshape[1], other.dshape[1]);
             i += theight * owidth;
         }
     }
@@ -463,15 +401,26 @@ Tensor Tensor::matmul(Tensor& other) {
     DimVec res_dim = {this->shape[0], this->shape[1], this->dshape[0], other.dshape[1]};
     Vec1D res_data(this->shape[0] * this->shape[1] * this->dshape[0] * other.dshape[1], 0.0f);
 
-    std::function<void(Tensor&, float*, int, int)> mm = std::bind(&Tensor::_matmul, this, _1, _2, _3, _4);
+    MatmulFunc mm_fn;
+    if (this->device == Device::CUDA) {
+        mm_fn = std::bind(matmul_cuda, _1, _2, _3, _4, _5, _6);
+    } else {
+#ifdef LF_NO_AVX
+        mm_fn = std::bind(matmul_cpu, _1, _2, _3, _4, _5, _6);
+#else
+        mm_fn = std::bind(matmul_avx, _1, _2, _3, _4, _5, _6);
+#endif
+    }
 
-    (this->shape[0] > 1 || this->shape[1] > 1) ? _matmul_deep(other, res_data.data(), mm)
-                                               : mm(other, res_data.data(), 0, 0);
+    if (this->shape[0] > 1 || this->shape[1] > 1) {
+        _matmul_deep(other, res_data.data(), mm_fn);
+    } else {
+        mm_fn(this->data.data(), other.data.data(), res_data.data(), this->dshape[0], this->dshape[1], other.dshape[1]);
+    }
 
     Tensor res_tensor = Tensor(res_dim, res_data, {this, &other}, need_grad(*this, other));
-    if (res_tensor.require_grad) {
+    if (res_tensor.require_grad)
         res_tensor.backward_fn = matmul_backward(this, &other, &res_tensor);
-    }
 
     return res_tensor;
 }
@@ -488,16 +437,15 @@ Tensor Tensor::channelwise_sum(Tensor& other) {
         for (int c = 0; c < res_ten.shape[1]; c++) {
             int off = n * res_ten.shape[1] * res_wh + c * res_wh;
 
-            for (int i = 0; i < res_wh; i++) {
-                res_ten.data[off + i] += other.data[c];
-            }
+            auto resb = res_ten.data.begin() + off;
+            float oc = other.data[c];
+
+            std::transform(resb, resb + res_wh, resb, [oc](float& res) { return res + oc; });
         }
     }
 
-    if (res_ten.require_grad) {
+    if (res_ten.require_grad)
         res_ten.backward_fn = channelwise_sum_backward(this, &other, &res_ten);
-    }
-
     return res_ten;
 }
 
@@ -509,10 +457,8 @@ Tensor Tensor::reshape(DimVec new_shape) {
     }
 
     Tensor res_tensor = Tensor(new_shape, this->data, {this}, this->require_grad);
-    if (res_tensor.require_grad) {
+    if (res_tensor.require_grad)
         res_tensor.backward_fn = reshape_backward(this, &res_tensor);
-    }
-
     return res_tensor;
 }
 
@@ -543,70 +489,45 @@ Tensor Tensor::get_block(int n) {
         throw std::logic_error("get_channel: Wrong index of channel\n");
     }
 
-    int bs = this->shape[1] * this->dshape[0] * this->dshape[1];
-    int si = n * bs;
-    int ei = (n + 1) * bs;
+    int si = n * this->shape[1] * this->dshape[0] * this->dshape[1];
 
     DimVec block_shape = this->shape;
     block_shape[0] = 1;
+    Tensor res = Tensor(block_shape);
 
-    Vec1D block_data(ei - si);
-
-    for (int i = si; i < ei; i++) {
-        block_data[i - si] = this->data[i];
-    }
-
-    return Tensor(block_shape, block_data);
+    auto res_beg = res.data.begin();
+    std::transform(res_beg, res.data.end(), this->data.begin() + si, res_beg, std::plus<float>());
+    return res;
 }
 
 Tensor Tensor::get_channel(int channel) {
-    if (this->shape[1] <= channel) {
+    if (this->shape[0] != 1)
+        throw std::logic_error("get_channel: Only tensors with batch_size == 1 supported\n");
+    if (this->shape[1] <= channel)
         throw std::logic_error("get_channel: Wrong index of channel\n");
-    }
 
     int si = this->dshape[0] * this->dshape[1] * channel;
-    int ei = this->dshape[0] * this->dshape[1] * (channel + 1);
 
     DimVec channel_shape = this->shape;
     channel_shape[1] = 1;
 
-    Vec1D channel_data(ei - si);
-
-    for (int i = si; i < ei; i++) {
-        channel_data[i - si] = this->data[i];
-    }
-
-    return Tensor(channel_shape, channel_data);
+    Tensor res = Tensor(channel_shape);
+    auto res_beg = res.data.begin();
+    std::transform(res_beg, res.data.end(), this->data.begin() + si, res_beg, std::plus<float>());
+    return res;
 }
 
-Tensor Tensor::add_channel(Tensor& channel) {
+void Tensor::add_channel(Tensor& channel) {
     if (this->shape[0] != channel.shape[0] && this->dshape[1] != channel.dshape[1] &&
         this->shape[2] != channel.shape[2]) {
         throw std::logic_error("add_channel: Wrong size of new channel\n");
     }
-    int dsize = this->dshape[0] * this->dshape[1];
-    int bs = this->shape[1] * dsize;
 
-    DimVec res_shape = this->shape;
-    res_shape[1]++;
-
-    Vec1D res_data(res_shape[0] * res_shape[1] * dsize);
-    int li = 0;
-
-    for (int n = 0; n < this->shape[0]; n++) {
-        int si = n * bs;
-        int ei = (n + 1) * bs;
-
-        for (int i = si; i < ei; i++) {
-            res_data[i - si] = this->data[i];
-        }
-
-        for (; li < dsize; li++) {
-            res_data[ei + li] = channel.data[li];
-        }
+    this->shape[1]++;
+    this->data.reserve(this->size());
+    for (std::size_t i = 0; i < channel.size(); i++) {
+        this->data.push_back(channel.data[i]);
     }
-
-    return Tensor(res_shape, res_data);
 }
 
 Tensor Tensor::correlate(Tensor& filter, DimVec stride, DimVec padding) {
@@ -712,6 +633,11 @@ Tensor Tensor::rot180() {
     }
 
     return Tensor(this->shape, res_data);
+}
+
+Tensor Tensor::to(Device device) {
+    this->device = device;
+    return *this;
 }
 
 void Tensor::backward() {

@@ -119,7 +119,7 @@ Tensor* Conv2D::forward(Tensor* x) {
             cor_chan += xch_ten.correlate(f_channel, this->stride);
         }
 
-        o_ten = o_ten.add_channel(cor_chan);
+        o_ten.add_channel(cor_chan);
     }
 
     Tensor* cor_ten = new Tensor(o_ten.shape, o_ten.data, {padded_x, this->weight->weight_}, true);
