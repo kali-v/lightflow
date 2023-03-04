@@ -20,6 +20,17 @@ make install
 Train a simple CNN on the FashionMNIST dataset. 
 
 ```c++
+#include <fstream>
+#include <iostream>
+#include <ostream>
+
+#include "fashion_mnist_dataset.h"
+#include <lightflow/config.h>
+#include <lightflow/loss.h>
+#include <lightflow/nn.h>
+#include <lightflow/optimizer.h>
+#include <lightflow/tensor.h>
+
 FashionMnistDataset dataset = FashionMnistDataset("data/fashion_mnist_train_vectors.csv",
                                                   "data/fashion_mnist_train_labels.csv");
 

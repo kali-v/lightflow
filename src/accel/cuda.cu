@@ -1,6 +1,7 @@
-#include "cuda_runtime.h"
 #include "stdio.h"
 #include <iostream>
+
+#include "cuda_runtime.h"
 
 __global__ void matmul_cuda_kernel(float* a, float* b, float* c, int ah, int aw, int bw) {
     int i = blockIdx.y * blockDim.y + threadIdx.y;

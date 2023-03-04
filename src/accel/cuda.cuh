@@ -1,7 +1,6 @@
-#pragma once
-#include "cuda_runtime.h"
-#include "device_launch_parameters.h"
-
-#include <stdio.h>
+#ifndef CUDA_CUH
+#define CUDA_CUH
 
 void matmul_cuda(float* a, float* other, float* res, int ah, int aw, int bw);
+
+#endif

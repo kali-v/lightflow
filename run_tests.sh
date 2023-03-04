@@ -1,5 +1,4 @@
 function test {
-	rm -rf build/test
 	mkdir -p build/test
 	cd build
 	cmake -DCMAKE_INSTALL_PREFIX=local -DCMAKE_CXX_FLAGS="$@" ..

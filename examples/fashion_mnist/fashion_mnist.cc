@@ -9,7 +9,7 @@
 #include <lightflow/optimizer.h>
 #include <lightflow/tensor.h>
 
-int main(int argc, char** argv) {
+int main() {
     // note that the dataset in ./data is only a snippet not a full dataset
     FashionMnistDataset dataset =
         FashionMnistDataset("data/fashion_mnist_train_vectors.csv", "data/fashion_mnist_train_labels.csv");

@@ -121,10 +121,9 @@ Tensor Tensor::scalar(int value) { return Tensor({1}, (float)value); }
 
 Tensor Tensor::random(DimVec shape, float from, float to) {
     Tensor rand_tensor = Tensor(shape);
-
     for (std::size_t i = 0; i < rand_tensor.size(); i++) {
-        float rand = (std::rand() / RAND_MAX) * (to - from) + std::abs(from);
-        rand_tensor.data.push_back(rand);
+        float rand = (std::rand() / (float)RAND_MAX) * (to - from) + std::abs(from);
+        rand_tensor.data[i] = rand;
     }
 
     return rand_tensor;
