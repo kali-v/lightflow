@@ -32,6 +32,11 @@ Weight::Weight(Tensor weight) {
     this->weight_->require_grad = true;
 }
 
+Weight::~Weight() {
+    delete this->weight_;
+    delete this->t_weight_;
+}
+
 void Weight::operator=(Tensor& weight) {
     delete this->t_weight_;
     this->t_weight_ = new Tensor(weight.transpose());
@@ -48,6 +53,12 @@ Tensor Weight::grad(bool from_transposed) {
 
 Tensor& Weight::operator()(bool transposed) { return transposed ? *this->t_weight_ : *this->weight_; }
 
+Module::~Module() {
+    for (Tensor* param : this->parameters()) {
+        free(param);
+    }
+}
+
 Tensor* Module::operator()(Tensor* x) { return forward(x); }
 
 Tensor* Module::forward(Tensor* x) { return x; }
@@ -58,20 +69,21 @@ Linear::Linear(int in_features, int out_features) {
     this->in_features = in_features;
     this->out_features = out_features;
 
-    Tensor* bias_tensor = new Tensor({1, out_features}, .1f, {}, true);
-
     Tensor weight_tensor = Tensor({out_features, in_features}, 0.0f, {}, true);
     xavier_normal_init(&weight_tensor);
 
-    this->bias = bias_tensor;
+    this->bias = new Tensor({1, out_features}, .1f, {}, true);
     this->weight = new Weight(weight_tensor);
+}
+
+Linear::~Linear() {
+    delete this->bias;
+    delete this->weight;
 }
 
 Tensor* Linear::forward(Tensor* x) {
     Tensor* mul_tensor = new Tensor(x->matmul((*this->weight)()));
-
     Tensor* out_tensor = new Tensor(*mul_tensor + *this->bias);
-
     return out_tensor;
 }
 
@@ -85,14 +97,19 @@ Conv2D::Conv2D(int in_channels, int out_channels, DimVec kernel_size, DimVec str
 
     this->padding_layer = new Padding(padding);
 
-    Tensor* bias_tensor = new Tensor({1, out_channels, 1, 1}, 0.1f, {}, true);
+    this->bias = new Tensor({1, out_channels, 1, 1}, 0.1f, {}, true);
 
     std::vector<int> weight_shape = {out_channels, in_channels, kernel_size[0], kernel_size[1]};
     Tensor weight_tensor = Tensor(weight_shape, 0.0f, {}, true);
     xavier_normal_init(&weight_tensor);
 
-    this->bias = bias_tensor;
     this->weight = new Weight(weight_tensor);
+}
+
+Conv2D::~Conv2D() {
+    delete this->padding_layer;
+    delete this->bias;
+    delete this->weight;
 }
 
 Tensor* Conv2D::forward(Tensor* x) {
@@ -123,7 +140,6 @@ Tensor* Conv2D::forward(Tensor* x) {
     }
 
     Tensor* cor_ten = new Tensor(o_ten.shape, o_ten.data, {padded_x, this->weight->weight_}, true);
-
     if (cor_ten->require_grad) {
         cor_ten->backward_fn = correlate_backward(padded_x, this->weight->weight_, cor_ten, this->stride);
     }
@@ -236,6 +252,12 @@ Tensor* Sigmoid::forward(Tensor* x) {
 }
 
 Sequential::Sequential(ModuleRef layers) { this->layers = layers; }
+
+Sequential::~Sequential() {
+    for (Module* layer : this->layers) {
+        delete layer;
+    }
+}
 
 std::vector<Tensor*> Sequential::parameters() {
     std::vector<Tensor*> params;

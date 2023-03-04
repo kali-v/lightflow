@@ -1,54 +1,60 @@
-# taskset -c 0 python benchmark.py
-
 import time
-import numpy as np
-from scipy.signal import correlate
+import os
+import torch
+from torch import nn
 
 
 def matmul(a_shape, b_shape, it):
     def _matmul():
-        a = np.random.rand(*a_shape)
-        b = np.random.rand(*b_shape)
         dur = 0
         for _ in range(it):
             st = time.monotonic()
-            a @ b
+            a = torch.rand(*a_shape).to(device)
+            b = torch.rand(*b_shape).to(device)
+            c = a @ b
             dur += time.monotonic() - st
         return int(dur * 1e3)
-    name = f"matmul_{str(a_shape)}_{str(b_shape)}"
-    return name, _matmul
+    shp = (str(a_shape)+str(b_shape)).replace(" ", "")
+    return f"mm_{shp}", _matmul
 
 
-def corr(a_shape, b_shape, it):
-    def _corr():
-        a = np.random.rand(*a_shape)
-        b = np.random.rand(*b_shape)
-
+def conv(a_shape, it, task_id):
+    def _conv():
         dur = 0
+        model = nn.Sequential(
+            nn.Conv2d(1, 32, 3, 3, 1), nn.LeakyReLU(), nn.MaxPool2d(2),
+            nn.Conv2d(32, 128, 2, 1, 0), nn.LeakyReLU(), nn.MaxPool2d(2),
+            nn.Conv2d(128, 64, 2, 2, 1), nn.LeakyReLU(), nn.Flatten(),
+            nn.Linear(7744, 512), nn.LeakyReLU(), nn.Linear(512, 10)
+        ).to(device)
         for _ in range(it):
             st = time.monotonic()
-            correlate(a, b, mode="valid")
+            a = torch.rand(*a_shape).to(device)
+            model(a)
             dur += time.monotonic() - st
         return int(dur * 1e3)
-    name = f"corr_{str(a_shape)}_{str(b_shape)}"
-    return name, _corr
+    return f"conv_{task_id}", _conv
 
 
-with open('lfres') as f:
-    lfres = f.read().splitlines()
+device = "cpu" if int(os.getenv("LF_DEFDEV")) == 0 else "cuda"
+mul = 1 if device == "cpu" else 2
+
+lfres = []
+lfpath = "lfres"
+if os.path.isfile(lfpath):
+    with open(lfpath, "r") as f:
+        lfres = f.read().splitlines()
 
 tasks = [
-    matmul((4096, 4096), (4096, 4096), 1),
-    matmul((2048, 2048), (2048, 2048), 5),
-    matmul((5, 5, 2048, 2048), (5, 5, 2048, 2048), 1),
-    corr((4096, 4096), (8, 8), 1),
-    corr((1024, 1024), (64, 64), 1)
+    matmul((4096, 4096), (4096, 4096), 1 * mul),
+    matmul((2048, 2048), (2048, 2048), 5 * mul),
+    matmul((2, 2, 2048, 2048), (2, 2, 2048, 2048), 1 * mul),
+    conv((1, 1, 256, 256), 100 * mul, 1),
 ]
 
 for i, [name, task] in enumerate(tasks):
     py_dur = task()
-    lf_dur = int(lfres[i])
+    lf_dur = int(lfres[i] if i < len(lfres) else 1)
     diff = py_dur/lf_dur
-    color = '\033[92m' if diff > 0.7 else '\033[91m'
-    print(f"---\n{name}:\n{color}{diff:.2f} lf_dur: {lf_dur}ms\tpy_dur: {py_dur}ms\033[0m")
-
+    color = '\033[92m' if diff > 0.70 else '\033[91m'
+    print(f"{name}:\t{color}{diff:.2f} lf_time: {lf_dur}ms\tpy_time: {py_dur}ms\033[0m")

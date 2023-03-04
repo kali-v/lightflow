@@ -112,7 +112,10 @@ Tensor::~Tensor() {
     if (!this->require_grad && this->grad) {
         delete this->grad;
     }
+    this->children.clear();
+    this->children.shrink_to_fit();
     this->data.clear();
+    this->data.shrink_to_fit();
 };
 
 Tensor Tensor::scalar(float value) { return Tensor({1}, value); }

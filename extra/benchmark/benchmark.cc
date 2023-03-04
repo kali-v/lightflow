@@ -1,15 +1,15 @@
 #include <chrono>
 #include <iostream>
 
+#include <lightflow/nn.h>
 #include <lightflow/tensor.h>
 
 int matmul(DimVec a_shape, DimVec b_shape, int it) {
-    Tensor a = Tensor::random(a_shape);
-    Tensor b = Tensor::random(b_shape);
-
     float dur = 0;
     for (int i = 0; i < it; i++) {
         auto st = std::chrono::steady_clock::now();
+        Tensor a = Tensor::random(a_shape);
+        Tensor b = Tensor::random(b_shape);
         Tensor c = a.matmul(b);
         auto et = std::chrono::steady_clock::now();
         dur += std::chrono::duration_cast<std::chrono::milliseconds>(et - st).count();
@@ -17,25 +17,29 @@ int matmul(DimVec a_shape, DimVec b_shape, int it) {
     return dur;
 }
 
-int corr(DimVec a_shape, DimVec b_shape, int it) {
-    Tensor a = Tensor::random(a_shape);
-    Tensor b = Tensor::random(b_shape);
-
+int conv2d(DimVec a_shape, int it) {
     float dur = 0;
     for (int i = 0; i < it; i++) {
         auto st = std::chrono::steady_clock::now();
-        Tensor c = a.correlate(b);
+        Tensor a = Tensor::random(a_shape);
+        Sequential model = Sequential({new Conv2D(1, 32, {3, 3}, {3, 3}, {1, 1}), new LeakyReLU(), new MaxPool2D(2),
+                            new Conv2D(32, 128, {2, 2}, {1, 1}, {0, 0}), new LeakyReLU(), new MaxPool2D(2),
+                            new Conv2D(128, 64, {2, 2}, {2, 2}, {1, 1}), new LeakyReLU(), new Flatten(),
+                            new Linear(7744, 512), new LeakyReLU(), new Linear(512, 10)});
+
+        Tensor c = model(a);
         auto et = std::chrono::steady_clock::now();
         dur += std::chrono::duration_cast<std::chrono::milliseconds>(et - st).count();
-        //std::cout << c.to_string() << std::endl;
     }
+
     return dur;
 }
 
 int main() {
-    std::cout << matmul({4096, 4096}, {4096, 4096}, 1) << std::endl;
-    std::cout << matmul({2048, 2048}, {2048, 2048}, 5) << std::endl;
-    std::cout << matmul({5, 5, 2048, 2048}, {5, 5, 2048, 2048}, 1) << std::endl;
-    std::cout << corr({4096, 4096}, {8, 8}, 1) << std::endl;
-    std::cout << corr({1024, 1024}, {64, 64}, 1) << std::endl;
+    int mul = atoi(getenv("LF_DEFDEV")) == 0 ? 1 : 2;
+
+    std::cout << matmul({4096, 4096}, {4096, 4096}, 1 * mul) << std::endl;
+    std::cout << matmul({2048, 2048}, {2048, 2048}, 5 * mul) << std::endl;
+    std::cout << matmul({2, 2, 2048, 2048}, {2, 2, 2048, 2048}, 1 * mul) << std::endl;
+    std::cout << conv2d({1, 1, 256, 256}, 100 * mul) << std::endl;
 }
