@@ -120,32 +120,12 @@ Tensor* Conv2D::forward(Tensor* x) {
         padded_x = this->padding_layer->forward(x);
     }
 
-    int nrows = floor((padded_x->dshape[0] - filter.dshape[0]) / this->stride[0] + 1);
-    int ncols = floor((padded_x->dshape[1] - filter.dshape[1]) / this->stride[1] + 1);
-    DimVec out_shape = {padded_x->shape[0], 0, nrows, ncols};
-    Tensor o_ten = Tensor(out_shape, 0.0f, {}, true);
-    out_shape[1] = 1;
-
-    for (int n = 0; n < this->out_channels; n++) {
-        Tensor f_block = filter.get_block(n);
-        Tensor cor_chan = Tensor(out_shape, 0.0f);
-
-        for (int ch = 0; ch < this->in_channels; ch++) {
-            Tensor xch_ten = padded_x->get_channel(ch);
-            Tensor f_channel = f_block.get_channel(ch);
-            cor_chan += xch_ten.correlate(f_channel, this->stride);
-        }
-
-        o_ten.add_channel(cor_chan);
-    }
-
-    Tensor* cor_ten = new Tensor(o_ten.shape, o_ten.data, {padded_x, this->weight->weight_}, true);
-    if (cor_ten->require_grad) {
-        cor_ten->backward_fn = correlate_backward(padded_x, this->weight->weight_, cor_ten, this->stride);
-    }
+    Tensor* cor_ten = new Tensor(padded_x->correlate(filter, this->stride));
+    cor_ten->children = {padded_x, this->weight->weight_};
+    cor_ten->require_grad = true;
+    cor_ten->backward_fn = correlate_backward(padded_x, this->weight->weight_, cor_ten, this->stride);
 
     Tensor* out_ten = new Tensor(cor_ten->channelwise_sum(*this->bias));
-
     return out_ten;
 }
 
@@ -172,12 +152,12 @@ Tensor* MaxPool2D::forward(Tensor* x) {
     int x_height = x->dshape[0];
     int x_width = x->dshape[1];
 
-    std::vector<int> argmaxs;
-    argmaxs.reserve(x->data.size());
-
     DimVec res_shape = {x->shape[0], x->shape[1], x_height / ks, x_width / ks};
+    int res_size = res_shape[0] * res_shape[1] * res_shape[2] * res_shape[3];
     Vec1D res_data;
-    res_data.reserve(res_shape[0] * res_shape[1] * res_shape[2] * res_shape[3]);
+    res_data.reserve(res_size);
+    std::vector<int> argmaxs;
+    argmaxs.reserve(res_size);
 
     for (int n = 0; n < x->shape[0]; n++) {
         for (int c = 0; c < x->shape[1]; c++) {
@@ -185,6 +165,7 @@ Tensor* MaxPool2D::forward(Tensor* x) {
                 int off = n * x->shape[1] * x_height * x_width + c * x_height * x_width + i * x_width;
                 float max = x->data[off];
                 int argmax = off;
+
                 for (int j = 0; j < x_width; j += ks) {
                     if (i + ks <= x_height && j + ks <= x_width) {
                         for (int k0 = 0; k0 < ks; k0++) {

@@ -128,7 +128,6 @@ Tensor Tensor::random(DimVec shape, float from, float to) {
         float rand = (std::rand() / (float)RAND_MAX) * (to - from) + std::abs(from);
         rand_tensor.data[i] = rand;
     }
-
     return rand_tensor;
 }
 
@@ -504,6 +503,7 @@ Tensor Tensor::get_block(int n) {
 }
 
 Tensor Tensor::get_channel(int channel) {
+    // TODO: rewrite this
     if (this->shape[0] != 1)
         throw std::logic_error("get_channel: Only tensors with batch_size == 1 supported\n");
     if (this->shape[1] <= channel)
@@ -512,6 +512,7 @@ Tensor Tensor::get_channel(int channel) {
     int si = this->dshape[0] * this->dshape[1] * channel;
 
     DimVec channel_shape = this->shape;
+    channel_shape[0] = 1;
     channel_shape[1] = 1;
 
     Tensor res = Tensor(channel_shape);
@@ -521,11 +522,7 @@ Tensor Tensor::get_channel(int channel) {
 }
 
 void Tensor::add_channel(Tensor& channel) {
-    if (this->shape[0] != channel.shape[0] && this->dshape[1] != channel.dshape[1] &&
-        this->shape[2] != channel.shape[2]) {
-        throw std::logic_error("add_channel: Wrong size of new channel\n");
-    }
-
+    // TODO: rewrite this
     this->shape[1]++;
     this->data.reserve(this->size());
     for (std::size_t i = 0; i < channel.size(); i++) {
@@ -543,36 +540,32 @@ Tensor Tensor::correlate(Tensor& filter, DimVec stride, DimVec padding) {
     int fil_width = filter.dshape[1];
     int x_height = this->dshape[0];
     int x_width = this->dshape[1];
+    int x_channels = this->shape[1];
 
     int nrows = floor((x_height - fil_height + 2 * padding[0]) / stride[0] + 1);
     int ncols = floor((x_width - fil_width + 2 * padding[1]) / stride[1] + 1);
 
     int fil_size = fil_height * fil_width;
     int x_size = x_height * x_width;
+    int out_size = nrows * ncols;
 
-    Vec1D res_data(filter.shape[0] * nrows * ncols, 0.0f);
+    Vec1D res_data(this->shape[0] * filter.shape[0] * out_size, 0.0f);
 
-    for (int n = 0; n < filter.shape[0]; n++) {
-        int rof = n * nrows * ncols;
-        int fof = n * this->shape[1] * fil_size;
-        for (int ch = 0; ch < this->shape[1]; ch++) {
-            for (int i = 0; i < nrows; i++) {
-                for (int k = 0; k < fil_height; k++) {
-                    int x_row = (i - padding[0]) * stride[0] + k;
-                    if (x_row >= x_height)
-                        break;
-                    if (x_row < 0)
-                        continue;
-                    for (int j = 0; j < ncols; j++) {
-                        for (int l = 0; l < fil_width; l++) {
-                            int x_col = (j - padding[1]) * stride[1] + l;
-                            if (x_col >= x_width)
-                                break;
-                            if (x_col >= 0) {
-                                float x_val = this->data[ch * x_size + x_width * x_row + x_col];
-                                float f_val = filter.data[fof + ch * fil_size + k * fil_height + l];
-
-                                res_data[rof + i * nrows + j] += x_val * f_val;
+    for (int xn = 0; xn < this->shape[0]; xn++) {
+#pragma omp parallel for
+        for (int n = 0; n < filter.shape[0]; n++) {
+            float* rtmp_data = &res_data[xn * filter.shape[0] * out_size + n * out_size];
+            for (int ch = 0; ch < x_channels; ch++) {
+                for (int i = 0; i < nrows; i++) {
+                    int ps0 = (i - padding[0]) * stride[0];
+                    for (int x_row = std::max(0, ps0); x_row < x_height && x_row < fil_height + ps0; x_row++) {
+                        int f_off = n * x_channels * fil_size + ch * fil_size + (x_row - ps0) * fil_height;
+                        int x_off = xn * x_channels * x_size + ch * x_size + x_width * x_row;
+                        for (int j = 0; j < ncols; j++) {
+                            int ps1 = (j - padding[1]) * stride[1];
+                            for (int x_col = std::max(0, ps1); x_col < x_width && x_col - ps1 < fil_width; x_col++) {
+                                rtmp_data[i * nrows + j] +=
+                                    this->data[x_off + x_col] * filter.data[f_off + x_col - ps1];
                             }
                         }
                     }
@@ -581,7 +574,7 @@ Tensor Tensor::correlate(Tensor& filter, DimVec stride, DimVec padding) {
         }
     }
 
-    return Tensor({1, filter.shape[0], nrows, ncols}, res_data);
+    return Tensor({this->shape[0], filter.shape[0], nrows, ncols}, res_data);
 }
 
 Tensor Tensor::pad(DimVec padding, float value) {

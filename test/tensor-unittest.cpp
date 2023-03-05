@@ -764,6 +764,30 @@ TEST(NN, Conv2D_8) {
     ASSERT_TRUE(compare_tensors(*x->grad, exp_x_grad));
 }
 
+TEST(NN, Conv2D_9) {
+    Vec2D data = load_test_data();
+
+    Tensor* x = new Tensor({3, 4, 4, 4}, data[0], {}, true);
+    Conv2D m = Conv2D(4, 2, {2, 2}, {1, 1, 1}, {0, 0});
+    Tensor weight_tensor = Tensor(m.weight->weight_->shape, data[1], {}, true);
+    m.weight = new Weight(weight_tensor);
+    m.bias = new Tensor({1, 2, 1, 1}, 0, {}, true);
+
+    Tensor* computed = m.forward(x);
+
+    computed->grad->fill(computed->data);
+    computed->backward();
+
+    Tensor expected = Tensor({3, 2, 3, 3}, data[2]);
+    ASSERT_TRUE(compare_tensors(expected, *computed));
+
+    Tensor exp_w_grad = Tensor(m.weight->weight_->shape, data[3]);
+    ASSERT_TRUE(compare_tensors(m.weight->grad(false), exp_w_grad));
+
+    Tensor exp_x_grad = Tensor(x->shape, data[4]);
+    ASSERT_TRUE(compare_tensors(*x->grad, exp_x_grad));
+}
+
 TEST(NN, Deep_Conv2D_1) {
     Vec2D data = load_test_data();
 

@@ -17,16 +17,34 @@ int matmul(DimVec a_shape, DimVec b_shape, int it) {
     return dur;
 }
 
-int conv2d(DimVec a_shape, int it) {
+int conv2d_load(DimVec a_shape, int it) {
     float dur = 0;
     for (int i = 0; i < it; i++) {
         auto st = std::chrono::steady_clock::now();
         Tensor a = Tensor::random(a_shape);
         Sequential model = Sequential({new Conv2D(1, 32, {3, 3}, {3, 3}, {1, 1}), new LeakyReLU(), new MaxPool2D(2),
-                            new Conv2D(32, 128, {2, 2}, {1, 1}, {0, 0}), new LeakyReLU(), new MaxPool2D(2),
-                            new Conv2D(128, 64, {2, 2}, {2, 2}, {1, 1}), new LeakyReLU(), new Flatten(),
-                            new Linear(7744, 512), new LeakyReLU(), new Linear(512, 10)});
+                                       new Conv2D(32, 128, {2, 2}, {1, 1}, {0, 0}), new LeakyReLU(), new MaxPool2D(2),
+                                       new Conv2D(128, 64, {2, 2}, {2, 2}, {1, 1}), new LeakyReLU(), new Flatten(),
+                                       new Linear(7744, 512), new LeakyReLU(), new Linear(512, 10)});
 
+        Tensor c = model(a);
+        auto et = std::chrono::steady_clock::now();
+        dur += std::chrono::duration_cast<std::chrono::milliseconds>(et - st).count();
+    }
+
+    return dur;
+}
+
+int conv2d(DimVec a_shape, int it) {
+    float dur = 0;
+    Tensor a = Tensor::random(a_shape);
+    Sequential model = Sequential({new Conv2D(1, 32, {3, 3}, {3, 3}, {1, 1}), new LeakyReLU(), new MaxPool2D(2),
+                                   new Conv2D(32, 128, {2, 2}, {1, 1}, {0, 0}), new LeakyReLU(), new MaxPool2D(2),
+                                   new Conv2D(128, 64, {2, 2}, {2, 2}, {1, 1}), new LeakyReLU(), new Flatten(),
+                                   new Linear(7744, 512), new LeakyReLU(), new Linear(512, 10)});
+
+    for (int i = 0; i < it; i++) {
+        auto st = std::chrono::steady_clock::now();
         Tensor c = model(a);
         auto et = std::chrono::steady_clock::now();
         dur += std::chrono::duration_cast<std::chrono::milliseconds>(et - st).count();
@@ -41,5 +59,6 @@ int main() {
     std::cout << matmul({4096, 4096}, {4096, 4096}, 1 * mul) << std::endl;
     std::cout << matmul({2048, 2048}, {2048, 2048}, 5 * mul) << std::endl;
     std::cout << matmul({2, 2, 2048, 2048}, {2, 2, 2048, 2048}, 1 * mul) << std::endl;
+    std::cout << conv2d_load({1, 1, 256, 256}, 100 * mul) << std::endl;
     std::cout << conv2d({1, 1, 256, 256}, 100 * mul) << std::endl;
 }

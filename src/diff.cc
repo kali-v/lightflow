@@ -184,7 +184,6 @@ std::function<void()> reshape_backward(Tensor* x, Tensor* out) {
 std::function<void()> maxpool2d_backward(Tensor* x, Tensor* out, std::vector<int> argmaxs) {
     return [x, out, argmaxs]() {
         Vec1D grad(x->data.size(), 0.0f);
-
         for (std::size_t i = 0; i < argmaxs.size(); i++) {
             grad[argmaxs[i]] = out->grad->data[i];
         }
@@ -195,7 +194,6 @@ std::function<void()> maxpool2d_backward(Tensor* x, Tensor* out, std::vector<int
 std::function<void()> l2_backward(Tensor* pred, Tensor* target) {
     return [pred, target]() {
         Tensor grad_tensor = (*pred - *target) * 2;
-
         pred->add_grad(grad_tensor.data);
         target->add_grad(grad_tensor.data);
     };
@@ -204,7 +202,6 @@ std::function<void()> l2_backward(Tensor* pred, Tensor* target) {
 std::function<void()> softmax_cross_entropy_backward(Tensor* pred, Tensor* target) {
     return [pred, target]() {
         Tensor grad_tensor = *pred - *target;
-
         pred->add_grad(grad_tensor.data);
         target->add_grad(grad_tensor.data);
     };
@@ -213,7 +210,6 @@ std::function<void()> softmax_cross_entropy_backward(Tensor* pred, Tensor* targe
 std::function<void()> cross_entropy_backward(Tensor* pred, Tensor* target) {
     return [pred, target]() {
         Tensor grad_tensor = (*pred - *target) * 2;
-
         pred->add_grad(grad_tensor.data);
         target->add_grad(grad_tensor.data);
     };
@@ -246,10 +242,8 @@ std::function<void()> sigmoid_backward(Tensor* x, Tensor* out) {
     return [x, out]() {
         Tensor nx = *x * -1;
         Tensor enx = Tensor(nx.dshape, std::exp(1.0f)).pow(nx);
-
         Tensor den = (enx + 1).pow(2);
         Tensor grad = enx / den * *out->grad;
-
         x->add_grad(grad.data);
     };
 }

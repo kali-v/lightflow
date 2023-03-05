@@ -1,4 +1,5 @@
 function bench {
+    export LD_LIBRARY_PATH=../../build/local/lib
     g++ -llightflow benchmark.cc -o lfbench
     echo "-- CPU --"
     export LF_DEFDEV=0
