@@ -495,7 +495,7 @@ Tensor Tensor::get_block(int n) {
 
     DimVec block_shape = this->shape;
     block_shape[0] = 1;
-    Tensor res = Tensor(block_shape);
+    Tensor res = Tensor(block_shape, 0.0f);
 
     auto res_beg = res.data.begin();
     std::transform(res_beg, res.data.end(), this->data.begin() + si, res_beg, std::plus<float>());
@@ -503,7 +503,6 @@ Tensor Tensor::get_block(int n) {
 }
 
 Tensor Tensor::get_channel(int channel) {
-    // TODO: rewrite this
     if (this->shape[0] != 1)
         throw std::logic_error("get_channel: Only tensors with batch_size == 1 supported\n");
     if (this->shape[1] <= channel)
@@ -522,7 +521,6 @@ Tensor Tensor::get_channel(int channel) {
 }
 
 void Tensor::add_channel(Tensor& channel) {
-    // TODO: rewrite this
     this->shape[1]++;
     this->data.reserve(this->size());
     for (std::size_t i = 0; i < channel.size(); i++) {
@@ -632,7 +630,7 @@ Tensor Tensor::rot180() {
 }
 
 Tensor Tensor::to(Device device) {
-    // TODO: move the data
+    // TODO: actually move the data
     this->device = device;
     return *this;
 }
