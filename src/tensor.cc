@@ -11,10 +11,10 @@
 #include "diff.h"
 #include "utility.ipp"
 
-#include "accel/cpu.cc"
+#include "accel/cpu.h"
 
 #ifndef LF_NO_AVX
-#include "accel/avx.cc"
+#include "accel/avx.h"
 #endif
 #ifdef LF_CUDA_AVAIL
 #include "accel/cuda.cuh"
@@ -435,6 +435,7 @@ Tensor Tensor::channelwise_sum(Tensor& other) {
     Tensor res_ten = Tensor(this->shape, this->data, {this, &other}, need_grad(*this, other));
 
     int res_wh = res_ten.shape[2] * res_ten.shape[3];
+
     for (int n = 0; n < res_ten.shape[0]; n++) {
         for (int c = 0; c < res_ten.shape[1]; c++) {
             int off = n * res_ten.shape[1] * res_wh + c * res_wh;
@@ -471,6 +472,7 @@ Tensor Tensor::transpose() {
     int theight = this->dshape[1];
     int twidth = this->dshape[0];
 
+    // #pragma omp parallel for
     for (int n = 0; n < this->shape[0]; n++) {
         int boh = n * this->shape[1] * theight * twidth;
         for (int c = 0; c < this->shape[1]; c++) {
@@ -550,7 +552,6 @@ Tensor Tensor::correlate(Tensor& filter, DimVec stride, DimVec padding) {
     Vec1D res_data(this->shape[0] * filter.shape[0] * out_size, 0.0f);
 
     for (int xn = 0; xn < this->shape[0]; xn++) {
-#pragma omp parallel for
         for (int n = 0; n < filter.shape[0]; n++) {
             float* rtmp_data = &res_data[xn * filter.shape[0] * out_size + n * out_size];
             for (int ch = 0; ch < x_channels; ch++) {
@@ -582,6 +583,7 @@ Tensor Tensor::pad(DimVec padding, float value) {
     Tensor res_tensor =
         Tensor({this->shape[0], this->shape[1], this->shape[2] + hpad * 2, this->shape[3] + wpad * 2}, value);
 
+    // #pragma omp parallel for
     for (int n = 0; n < res_tensor.shape[0]; n++) {
         int ni = n * res_tensor.shape[1] * res_tensor.shape[2] * res_tensor.shape[3];
         int tni = n * this->shape[1] * this->shape[2] * this->shape[3];
@@ -609,6 +611,7 @@ Tensor Tensor::rot180() {
     int n = this->dshape[1];
 
     std::vector<float> res_data(this->data);
+    // #pragma omp parallel for
     for (int bs = 0; bs < this->shape[0]; bs++) {
         for (int c = 0; c < this->shape[1]; c++) {
             int off = bs * this->shape[1] * m * n + c * m * n;

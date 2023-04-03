@@ -1,3 +1,5 @@
+
+#include <algorithm>
 #include <immintrin.h>
 
 void matmul_avx(float* a, float* b, float* c, int ah, int aw, int bw) {

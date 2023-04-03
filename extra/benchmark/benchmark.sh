@@ -1,6 +1,7 @@
 function bench {
     export LD_LIBRARY_PATH=../../build/local/lib
     g++ -llightflow benchmark.cc -o lfbench
+    echo $1
     echo "-- CPU --"
     export LF_DEFDEV=0
     ./lfbench > lfres
@@ -13,4 +14,4 @@ function bench {
 }
 
 mkdir -p runs
-bench | tee runs/$(date +"%y%m%d-%H%M%S")
+bench $1 | tee runs/$(date +"%y%m%d-%H%M%S")
