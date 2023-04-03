@@ -125,8 +125,7 @@ Tensor* Conv2D::forward(Tensor* x) {
     cor_ten->require_grad = true;
     cor_ten->backward_fn = correlate_backward(padded_x, this->weight->weight_, cor_ten, this->stride);
 
-    Tensor* out_ten = new Tensor(cor_ten->channelwise_sum(*this->bias));
-    return out_ten;
+    return new Tensor(cor_ten->channelwise_sum(*this->bias));
 }
 
 std::vector<Tensor*> Conv2D::parameters() { return {this->weight->weight_, this->bias}; }

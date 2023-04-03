@@ -137,8 +137,7 @@ std::function<void()> correlate_backward(Tensor* x, Tensor* filter, Tensor* out,
         int fsize = filter->dshape[0] * filter->dshape[1];
 
         if (x->require_grad) {
-            Tensor* rot_filter = new Tensor(*filter);
-            *rot_filter = rot_filter->rot180();
+            Tensor* rot_filter = new Tensor(filter->rot180());
 
             Vec1D x_grad(x->data.size(), 0.0f);
             Vec1D fil_grad(filter->data.size(), 0.0f);

@@ -472,7 +472,7 @@ Tensor Tensor::transpose() {
     int theight = this->dshape[1];
     int twidth = this->dshape[0];
 
-    // #pragma omp parallel for
+#pragma omp parallel for
     for (int n = 0; n < this->shape[0]; n++) {
         int boh = n * this->shape[1] * theight * twidth;
         for (int c = 0; c < this->shape[1]; c++) {
@@ -536,44 +536,20 @@ Tensor Tensor::correlate(Tensor& filter, DimVec stride, DimVec padding) {
                                "\n and \n filter: " + filter.to_string() + "\n");
     }
 
-    int fil_height = filter.dshape[0];
-    int fil_width = filter.dshape[1];
-    int x_height = this->dshape[0];
-    int x_width = this->dshape[1];
-    int x_channels = this->shape[1];
-
-    int nrows = floor((x_height - fil_height + 2 * padding[0]) / stride[0] + 1);
-    int ncols = floor((x_width - fil_width + 2 * padding[1]) / stride[1] + 1);
-
-    int fil_size = fil_height * fil_width;
-    int x_size = x_height * x_width;
-    int out_size = nrows * ncols;
-
-    Vec1D res_data(this->shape[0] * filter.shape[0] * out_size, 0.0f);
-
-    for (int xn = 0; xn < this->shape[0]; xn++) {
-        for (int n = 0; n < filter.shape[0]; n++) {
-            float* rtmp_data = &res_data[xn * filter.shape[0] * out_size + n * out_size];
-            for (int ch = 0; ch < x_channels; ch++) {
-                for (int i = 0; i < nrows; i++) {
-                    int ps0 = (i - padding[0]) * stride[0];
-                    for (int x_row = std::max(0, ps0); x_row < x_height && x_row < fil_height + ps0; x_row++) {
-                        int f_off = n * x_channels * fil_size + ch * fil_size + (x_row - ps0) * fil_height;
-                        int x_off = xn * x_channels * x_size + ch * x_size + x_width * x_row;
-                        for (int j = 0; j < ncols; j++) {
-                            int ps1 = (j - padding[1]) * stride[1];
-                            for (int x_col = std::max(0, ps1); x_col < x_width && x_col - ps1 < fil_width; x_col++) {
-                                rtmp_data[i * nrows + j] +=
-                                    this->data[x_off + x_col] * filter.data[f_off + x_col - ps1];
-                            }
-                        }
-                    }
-                }
-            }
-        }
+    CorrelateFunc cor_fn = std::bind(correlate_cpu, _1, _2, _3, _4);
+    if (this->device == Device::CUDA) {
+#ifdef LF_CUDA_AVAIL
+        cor_fn = std::bind(correlate_cpu, _1, _2, _3, _4);
+#else
+        std::cerr << "CUDA not available" << std::endl;
+#endif
+    } else {
+#ifndef LF_NO_AVX
+        cor_fn = std::bind(correlate_avx, _1, _2, _3, _4);
+#endif
     }
 
-    return Tensor({this->shape[0], filter.shape[0], nrows, ncols}, res_data);
+    return cor_fn(*this, filter, stride, padding);
 }
 
 Tensor Tensor::pad(DimVec padding, float value) {
@@ -583,7 +559,7 @@ Tensor Tensor::pad(DimVec padding, float value) {
     Tensor res_tensor =
         Tensor({this->shape[0], this->shape[1], this->shape[2] + hpad * 2, this->shape[3] + wpad * 2}, value);
 
-    // #pragma omp parallel for
+#pragma omp parallel for
     for (int n = 0; n < res_tensor.shape[0]; n++) {
         int ni = n * res_tensor.shape[1] * res_tensor.shape[2] * res_tensor.shape[3];
         int tni = n * this->shape[1] * this->shape[2] * this->shape[3];
@@ -611,7 +587,8 @@ Tensor Tensor::rot180() {
     int n = this->dshape[1];
 
     std::vector<float> res_data(this->data);
-    // #pragma omp parallel for
+
+#pragma omp parallel for
     for (int bs = 0; bs < this->shape[0]; bs++) {
         for (int c = 0; c < this->shape[1]; c++) {
             int off = bs * this->shape[1] * m * n + c * m * n;
@@ -630,6 +607,7 @@ Tensor Tensor::rot180() {
     }
 
     return Tensor(this->shape, res_data);
+    ;
 }
 
 Tensor Tensor::to(Device device) {

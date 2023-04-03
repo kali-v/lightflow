@@ -9,6 +9,7 @@ typedef std::vector<float> Vec1D;
 typedef std::vector<std::vector<float>> Vec2D;
 typedef std::vector<int> DimVec;
 typedef std::function<float(float, float)> OperationFunc;
+
 typedef std::function<void(float*, float*, float*, int, int, int)> MatmulFunc;
 
 inline float add(float a, float b) { return a + b; }
@@ -124,5 +125,7 @@ class Tensor {
 
     std::string to_string();
 };
+
+typedef std::function<Tensor(Tensor&, Tensor&, DimVec stride, DimVec padding)> CorrelateFunc;
 
 #endif
