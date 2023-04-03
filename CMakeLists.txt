@@ -44,16 +44,19 @@ add_library(${PROJECT_NAME} SHARED ${lightflow_src})
 
 set_target_properties(${PROJECT_NAME} PROPERTIES VERSION ${PROJECT_VERSION})
 set_target_properties(${PROJECT_NAME} PROPERTIES SOVERSION ${PROJECT_VERSION_MAJOR})
-set_target_properties(${PROJECT_NAME} PROPERTIES PUBLIC_HEADER "include/lightflow/config.h;include/lightflow/loss.h;include/lightflow/nn.h;include/lightflow/optimizer.h;include/lightflow/tensor.h;include/lightflow/diff.h;include/lightflow/accel/cpu.h;include/lightflow/accel/avx.h;include/lightflow/accel/cuda.cuh")
+set_target_properties(${PROJECT_NAME} PROPERTIES PUBLIC_HEADER "include/lightflow/config.h;include/lightflow/loss.h;include/lightflow/nn.h;include/lightflow/optimizer.h;include/lightflow/tensor.h;include/lightflow/diff.h;")
+set_target_properties(${PROJECT_NAME} PROPERTIES PRIVATE_HEADER "include/lightflow/accel/cpu.h;include/lightflow/accel/avx.h;include/lightflow/accel/cuda.cuh")
 
 target_include_directories(${PROJECT_NAME} PRIVATE src)
 target_include_directories(${PROJECT_NAME} PRIVATE include/lightflow)
+target_include_directories(${PROJECT_NAME} PRIVATE include/lightflow/accel)
 
 configure_file(${PROJECT_NAME}.pc.in ${PROJECT_NAME}.pc @ONLY)
 
 install(TARGETS ${PROJECT_NAME}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 	PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/lightflow
+	PRIVATE_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/lightflow/accel
 )
 
 install(FILES ${CMAKE_BINARY_DIR}/${PROJECT_NAME}.pc
