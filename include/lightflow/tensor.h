@@ -8,7 +8,9 @@
 typedef std::vector<float> Vec1D;
 typedef std::vector<std::vector<float>> Vec2D;
 typedef std::vector<int> DimVec;
-typedef std::function<float(float, float)> OperationFc;
+typedef std::function<float(float, float)> OperationFunc;
+
+typedef std::function<void(float*, float*, float*, int, int, int)> MatmulFunc;
 
 inline float add(float a, float b) { return a + b; }
 
@@ -18,21 +20,22 @@ inline float mul(float a, float b) { return a * b; }
 
 inline float ddiv(float a, float b) { return a / b; }
 
+enum class Device { CPU = 0, CUDA = 1 };
+const Device defdev = getenv("LF_DEFDEV") ? static_cast<Device>(atoi(getenv("LF_DEFDEV"))) : Device::CPU;
+
 class Tensor {
   private:
     std::size_t size();
     void check_same_shape(Tensor& other, bool allow_scalar = true);
     DimVec get_short_shape();
 
-    void _matmul_deep(Tensor& other, float* res, std::function<void(Tensor&, float*, int, int)>);
-    void _matmul_avx(Tensor& other, float* res, int tof = 0, int oof = 0);
-    void _matmul(Tensor& other, float* res, int tof = 0, int oof = 0);
+    void _matmul_deep(Tensor& other, float* res, MatmulFunc matmul_fn);
 
   public:
-    int dim;
-    DimVec dshape;
-    std::vector<int> shape;
     Vec1D data;
+    std::vector<int> shape;
+    DimVec dshape;
+    Device device;
 
     bool require_grad;
     Tensor* grad = nullptr;
@@ -40,27 +43,27 @@ class Tensor {
     std::function<void()> backward_fn;
     std::vector<Tensor*> children;
 
-    Tensor(const std::vector<int>& shape, bool require_grad = false);
+    Tensor(const std::vector<int>& shape, bool require_grad = false, Device device = defdev);
 
     Tensor(const std::vector<int>& shape, const Vec1D tensor, std::vector<Tensor*> children = {},
-           bool require_grad = false);
+           bool require_grad = false, Device device = defdev);
 
     Tensor(const std::vector<int>& shape, const Vec2D tensor, std::vector<Tensor*> children = {},
-           bool require_grad = false);
+           bool require_grad = false, Device device = defdev);
 
     Tensor(const std::vector<int>& shape, const float constant, std::vector<Tensor*> children = {},
-           bool require_grad = false);
+           bool require_grad = false, Device device = defdev);
 
     ~Tensor();
 
     Tensor apply(std::function<float(float)> function);
-    Tensor apply_operator(Tensor& other, OperationFc operation_fn);
+    Tensor apply_operator(Tensor& other, OperationFunc operation_fn);
 
     Vec1D get_row(int row_num);
     Vec1D get_col(int row_num);
     Tensor get_block(int n);
     Tensor get_channel(int channel);
-    Tensor add_channel(Tensor& channel);
+    void add_channel(Tensor& channel);
 
     static DimVec normalize_shape(DimVec shape);
 
@@ -93,7 +96,7 @@ class Tensor {
 
     Tensor matmul(Tensor& other);
     Tensor channelwise_sum(Tensor& other);
-    Tensor correlate(Tensor& filter, DimVec stride = {1, 1, 1}, DimVec padding = {0, 0, 0});
+    Tensor correlate(Tensor& filter, DimVec stride = {1, 1}, DimVec padding = {0, 0});
 
     int argmax();
 
@@ -116,25 +119,13 @@ class Tensor {
 
     bool has_same_shape(Tensor& other);
 
+    Tensor to(Device device);
+
     void backward();
 
     std::string to_string();
 };
 
-void print_vector(std::vector<float>);
-
-class Tensor1D : public Tensor {
-    using Tensor::Tensor;
-
-  public:
-    Vec1D get_tensor();
-};
-
-class Tensor2D : public Tensor {
-    using Tensor::Tensor;
-
-  public:
-    Vec2D get_tensor();
-};
+typedef std::function<Tensor(Tensor&, Tensor&, DimVec stride, DimVec padding)> CorrelateFunc;
 
 #endif

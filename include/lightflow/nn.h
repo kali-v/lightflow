@@ -20,6 +20,7 @@ class Weight {
     Tensor* t_weight_; // transposed weight
 
     Weight(Tensor weight);
+    ~Weight();
 
     void operator=(Tensor& weight);
     Tensor& operator()(bool transpose = true);
@@ -30,6 +31,8 @@ class Weight {
 class Module {
   public:
     Tensor* operator()(Tensor* x);
+
+    virtual ~Module();
 
     virtual std::vector<Tensor*> parameters();
     virtual Tensor* forward(Tensor* x);
@@ -44,6 +47,7 @@ class Linear : public Module {
     Weight* weight;
 
     Linear(int in_features, int out_features);
+    ~Linear();
 
     Tensor* forward(Tensor* x);
 
@@ -111,6 +115,7 @@ class Conv2D : public Module {
     Weight* weight;
 
     Conv2D(int in_channels, int out_channels, DimVec kernel_size, DimVec stride = {1}, DimVec padding = {0});
+    ~Conv2D();
 
     Tensor* forward(Tensor* x);
 
@@ -124,6 +129,7 @@ class Sequential {
     ModuleRef layers;
 
     Sequential(ModuleRef layers);
+    ~Sequential();
 
     Tensor& operator()(Tensor& x);
     std::vector<Tensor*> parameters();

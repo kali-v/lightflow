@@ -1,9 +1,8 @@
 # lightflow ⚡
 
 - Yet another deep learning framework
-- Somewhere in between of pytorch and micrograd
-- Lightweight, no 3rd party libraries required
-- Written in C++
+- Made for fun, educational purposes, and soon for paperclip maximizing
+- C++, lightweight, no 3rd party libraries required
 - CPU (+ AVX) support, CUDA soon
 
 ## Installation
@@ -20,6 +19,17 @@ make install
 Train a simple CNN on the FashionMNIST dataset. 
 
 ```c++
+#include <fstream>
+#include <iostream>
+#include <ostream>
+
+#include "fashion_mnist_dataset.h"
+#include <lightflow/config.h>
+#include <lightflow/loss.h>
+#include <lightflow/nn.h>
+#include <lightflow/optimizer.h>
+#include <lightflow/tensor.h>
+
 FashionMnistDataset dataset = FashionMnistDataset("data/fashion_mnist_train_vectors.csv",
                                                   "data/fashion_mnist_train_labels.csv");
 

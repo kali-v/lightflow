@@ -165,8 +165,8 @@ TEST(TENSOR_OPERATIONS, Correlate) {
                         0.5947, 0.5582, 0.1281, 0.8958, 1, 0.3792, 0.4531, 0.1841, 0.0365, 1}),
         Tensor({2, 2}, {2, 4.2, 3.8, 6.1}),
     };
-    DimVec strides[] = {{1, 1, 1}, {2, 2, 1}, {2, 2, 1}, {1, 1, 1}, {2, 2, 1}, {2, 2, 1}};
-    vector<int> paddings[] = {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 2, 0}, {0, 0, 0}, {0, 0, 0}};
+    DimVec strides[] = {{1, 1}, {2, 2}, {2, 2}, {1, 1}, {2, 2}, {2, 2}};
+    vector<int> paddings[] = {{0, 0}, {0, 0}, {0, 0}, {0, 2}, {0, 0}, {0, 0}};
 
     vector<Tensor> results = {Tensor({1, 4}, {5., 10., 14., 17.}),
                               Tensor({1, 2}, {5., 14.}),
@@ -569,7 +569,7 @@ TEST(NN, Conv2D_1) {
     Vec2D data = load_test_data();
 
     Tensor* x = new Tensor({1, 1, 2, 2}, {1, 2, 4, 5}, {}, true);
-    Conv2D m = Conv2D(1, 3, {1, 1}, {1, 1, 1}, {0, 0, 0});
+    Conv2D m = Conv2D(1, 3, {1, 1}, {1, 1}, {0, 0});
     Tensor weight_tensor = Tensor(m.weight->weight_->shape, data[0], {}, true);
     m.weight = new Weight(weight_tensor);
     m.bias = new Tensor(m.bias->shape, 0.0f, {}, true);
@@ -592,7 +592,7 @@ TEST(NN, Conv2D_2) {
     Vec2D data = load_test_data();
 
     Tensor* x = new Tensor({1, 2, 3, 3}, data[0], {}, true);
-    Conv2D m = Conv2D(2, 3, {2, 2}, {1, 1, 1}, {0, 0, 0});
+    Conv2D m = Conv2D(2, 3, {2, 2}, {1, 1}, {0, 0});
     Tensor mw = Tensor(m.weight->weight_->shape, 1, {}, true);
     mw.data[0] = 2;
     mw.data[1] = 3;
@@ -618,7 +618,7 @@ TEST(NN, Conv2D_3) {
     Vec2D data = load_test_data();
 
     Tensor* x = new Tensor({1, 2, 2, 2}, data[0], {}, true);
-    Conv2D m = Conv2D(2, 3, {2, 2}, {1, 1, 1}, {0, 0, 0});
+    Conv2D m = Conv2D(2, 3, {2, 2}, {1, 1}, {0, 0});
     Tensor mw = Tensor(m.weight->weight_->shape, data[1], {}, true);
     m.weight = new Weight(mw);
     m.bias = new Tensor(m.bias->shape, 0.0f, {}, true);
@@ -637,7 +637,7 @@ TEST(NN, Conv2D_4) {
     Vec2D data = load_test_data();
 
     Tensor* x = new Tensor({1, 1, 5, 5}, 3.0, {}, true);
-    Conv2D m = Conv2D(1, 1, {3, 3}, {2, 2}, {0, 0, 0});
+    Conv2D m = Conv2D(1, 1, {3, 3}, {2, 2}, {0, 0});
     Tensor mw = Tensor(m.weight->weight_->shape, 1, {}, true);
     mw.data[0] = 2;
     mw.data[1] = 3;
@@ -741,7 +741,7 @@ TEST(NN, Conv2D_8) {
     Vec2D data = load_test_data();
 
     Tensor* x = new Tensor({1, 1, 2, 2}, {1, 2, 4, 5}, {}, true);
-    Conv2D m = Conv2D(1, 3, {1, 1}, {1, 1, 1}, {0, 0, 0});
+    Conv2D m = Conv2D(1, 3, {1, 1}, {1, 1}, {0, 0});
     Tensor weight_tensor = Tensor(m.weight->weight_->shape, data[0], {}, true);
     m.weight = new Weight(weight_tensor);
     m.bias = new Tensor({1, 3, 1, 1}, {1, 2, 3}, {}, true);
@@ -764,17 +764,41 @@ TEST(NN, Conv2D_8) {
     ASSERT_TRUE(compare_tensors(*x->grad, exp_x_grad));
 }
 
+TEST(NN, Conv2D_9) {
+    Vec2D data = load_test_data();
+
+    Tensor* x = new Tensor({3, 4, 4, 4}, data[0], {}, true);
+    Conv2D m = Conv2D(4, 2, {2, 2}, {1, 1}, {0, 0});
+    Tensor weight_tensor = Tensor(m.weight->weight_->shape, data[1], {}, true);
+    m.weight = new Weight(weight_tensor);
+    m.bias = new Tensor({1, 2, 1, 1}, 0, {}, true);
+
+    Tensor* computed = m.forward(x);
+
+    computed->grad->fill(computed->data);
+    computed->backward();
+
+    Tensor expected = Tensor({3, 2, 3, 3}, data[2]);
+    ASSERT_TRUE(compare_tensors(expected, *computed));
+
+    Tensor exp_w_grad = Tensor(m.weight->weight_->shape, data[3]);
+    ASSERT_TRUE(compare_tensors(m.weight->grad(false), exp_w_grad));
+
+    Tensor exp_x_grad = Tensor(x->shape, data[4]);
+    ASSERT_TRUE(compare_tensors(*x->grad, exp_x_grad));
+}
+
 TEST(NN, Deep_Conv2D_1) {
     Vec2D data = load_test_data();
 
     Tensor* x = new Tensor({1, 2, 3, 3}, data[0], {}, true);
 
-    Conv2D f_layer = Conv2D(2, 3, {2, 2}, {1, 1, 1}, {0, 0, 0});
+    Conv2D f_layer = Conv2D(2, 3, {2, 2}, {1, 1}, {0, 0});
     Tensor f_weight = Tensor(f_layer.weight->weight_->shape, data[1], {}, true);
     f_layer.weight = new Weight(f_weight);
     f_layer.bias = new Tensor(f_layer.bias->shape, 0.0f, {}, true);
 
-    Conv2D s_layer = Conv2D(3, 2, {2, 2}, {1, 1, 1}, {0, 0, 0});
+    Conv2D s_layer = Conv2D(3, 2, {2, 2}, {1, 1}, {0, 0});
     Tensor s_weight = Tensor(s_layer.weight->weight_->shape, data[2], {}, true);
     s_layer.weight = new Weight(s_weight);
     s_layer.bias = new Tensor(s_layer.bias->shape, 0.0f, {}, true);
@@ -801,11 +825,11 @@ TEST(NN, Deep_Conv2D_2) {
     Vec1D x_val = data[0];
     Tensor* x = new Tensor({1, 2, 8, 8}, x_val, {}, true);
 
-    Conv2D l = Conv2D(2, 3, {2, 2}, {2, 2}, {0, 0, 0});
+    Conv2D l = Conv2D(2, 3, {2, 2}, {2, 2}, {0, 0});
     l.weight = new Weight(Tensor(l.weight->weight_->shape, data[1], {}, true));
     l.bias = new Tensor(l.bias->shape, 0.0f, {}, true);
 
-    Conv2D ll = Conv2D(3, 6, {3, 3}, {2, 2}, {0, 0, 0});
+    Conv2D ll = Conv2D(3, 6, {3, 3}, {2, 2}, {0, 0});
     ll.weight = new Weight(Tensor(ll.weight->weight_->shape, data[2], {}, true));
     ll.bias = new Tensor(ll.bias->shape, 0.0f, {}, true);
 

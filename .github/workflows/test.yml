@@ -1,19 +1,34 @@
 name: tests
 
-on:
-  push:
-    branches: [ "master"]
-  pull_request:
-    branches: [ "master" ]
+on: push
 
 jobs:
-  build:
-
+  test_cpu:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
-    - name: install gtest
-      run: git clone https://github.com/google/googletest.git && cd googletest && mkdir build && cd build && cmake .. && sudo make install && sudo ldconfig
-    - name: run
-      run: ./run_tests.sh
+      - uses: actions/checkout@v3
+      - name: install gtest
+        run: git clone https://github.com/google/googletest.git && cd googletest && mkdir build && cd build && cmake .. && sudo make install
+      - name: test cpu
+        run: LF_DEFDEV=0 ./run_tests.sh -DLF_NO_AVX
+
+  test_avx:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: install gtest
+        run: git clone https://github.com/google/googletest.git && cd googletest && mkdir build && cd build && cmake .. && sudo make install
+      - name: test avx
+        run: LF_DEFDEV=0 ./run_tests.sh
+
+  test_cuda:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: install gtest
+        run: git clone https://github.com/google/googletest.git && cd googletest && mkdir build && cd build && cmake .. && sudo make install
+      - name: test avx
+        run: LF_DEFDEV=1 ./run_tests.sh

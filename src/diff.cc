@@ -119,8 +119,8 @@ std::function<void()> correlate_backward(Tensor* x, Tensor* filter, Tensor* out,
         int out_size = out->dshape[0] * out->dshape[1];
 
         for (int n = 0; n < pad_out.shape[0]; n++) {
-            int nmi = n * pad_out.shape[0] * pad_out.shape[1] * pad_out_size;
-            int ni = n * out->shape[0] * out->shape[1] * out_size;
+            int nmi = n * pad_out.shape[1] * pad_out_size;
+            int ni = n * out->shape[1] * out_size;
             for (int c = 0; c < pad_out.shape[1]; c++) {
                 int cmi = c * pad_out_size;
                 int ci = c * out_size;
@@ -134,46 +134,66 @@ std::function<void()> correlate_backward(Tensor* x, Tensor* filter, Tensor* out,
             }
         }
 
+        int fsize = filter->dshape[0] * filter->dshape[1];
+
         if (x->require_grad) {
-            Tensor* rot_filter = new Tensor(*filter);
-            *rot_filter = rot_filter->rot180();
+            Tensor* rot_filter = new Tensor(filter->rot180());
 
             Vec1D x_grad(x->data.size(), 0.0f);
+            Vec1D fil_grad(filter->data.size(), 0.0f);
 
             int p = filter->shape[3] - 1;
             int x_size = x->dshape[0] * x->dshape[1];
 
             // correlate rotated filter over padded output gradient
-            for (int fn = 0; fn < rot_filter->shape[0]; fn++) {
-                Tensor mod_chan = pad_out.get_channel(fn);
-                Tensor rot_block = rot_filter->get_block(fn);
-                for (int fc = 0; fc < rot_filter->shape[1]; fc++) {
-                    Tensor fil_chan = rot_block.get_channel(fc);
-                    Tensor cor_out = mod_chan.correlate(fil_chan, {1, 1}, {p, p});
+            for (int b = 0; b < pad_out.shape[0]; b++) {
+                Tensor pad_block = pad_out.get_block(b);
+                Tensor xblock = x->get_block(b);
+                int offb = b * x->shape[1] * x_size;
 
-                    int offset = fc * x_size;
-                    for (std::size_t i = 0; i < cor_out.data.size(); i++) {
-                        x_grad[offset + i] += cor_out.data[i];
+                for (int ch = 0; ch < rot_filter->shape[0]; ch++) {
+                    Tensor pad_chan = pad_block.get_channel(ch);
+                    Tensor rot_block = rot_filter->get_block(ch);
+                    for (int fc = 0; fc < rot_filter->shape[1]; fc++) {
+                        Tensor fil_chan = rot_block.get_channel(fc);
+                        Vec1D cor_data = pad_chan.correlate(fil_chan, {1, 1}, {p, p}).data;
+
+                        auto xgrad_beg = x_grad.begin() + fc * x_size + offb;
+                        std::transform(xgrad_beg, xgrad_beg + cor_data.size(), cor_data.begin(), xgrad_beg,
+                                       std::plus<float>());
+                    }
+                    for (int xch = 0; xch < x->shape[1]; xch++) {
+                        Vec1D cor_data = xblock.get_channel(xch).correlate(pad_chan).data;
+
+                        auto filgrad_beg = fil_grad.begin() + ch * filter->shape[1] * fsize + xch * fsize;
+                        std::transform(filgrad_beg, filgrad_beg + cor_data.size(), cor_data.begin(), filgrad_beg,
+                                       std::plus<float>());
                     }
                 }
             }
             x->add_grad(x_grad);
-        }
+            filter->add_grad(fil_grad);
+        } else {
+            // compute filter grad
+            Vec1D fil_grad(filter->data.size(), 0.0f);
 
-        // compute filter grad
-        Vec1D out_data;
-        out_data.reserve(filter->data.size());
+            for (int b = 0; b < pad_out.shape[0]; b++) {
+                Tensor pad_block = pad_out.get_block(b);
+                Tensor xblock = x->get_block(b);
+                for (int ch = 0; ch < pad_out.shape[1]; ch++) {
+                    Tensor pad_chan = pad_block.get_channel(ch);
+                    for (int xch = 0; xch < x->shape[1]; xch++) {
+                        Vec1D cor_data = xblock.get_channel(xch).correlate(pad_chan).data;
 
-        for (int ch = 0; ch < out->grad->shape[1]; ch++) {
-            Tensor out_channel = pad_out.get_channel(ch);
-            for (int xch = 0; xch < x->shape[1]; xch++) {
-                Vec1D cor_data = x->get_channel(xch).correlate(out_channel).data;
-
-                out_data.insert(std::end(out_data), std::begin(cor_data), std::end(cor_data));
+                        auto filgrad_beg = fil_grad.begin() + ch * filter->shape[1] * fsize + xch * fsize;
+                        std::transform(filgrad_beg, filgrad_beg + cor_data.size(), cor_data.begin(), filgrad_beg,
+                                       std::plus<float>());
+                    }
+                }
             }
-        }
 
-        filter->add_grad(out_data);
+            filter->add_grad(fil_grad);
+        }
     };
 }
 
@@ -184,7 +204,6 @@ std::function<void()> reshape_backward(Tensor* x, Tensor* out) {
 std::function<void()> maxpool2d_backward(Tensor* x, Tensor* out, std::vector<int> argmaxs) {
     return [x, out, argmaxs]() {
         Vec1D grad(x->data.size(), 0.0f);
-
         for (std::size_t i = 0; i < argmaxs.size(); i++) {
             grad[argmaxs[i]] = out->grad->data[i];
         }
@@ -195,7 +214,6 @@ std::function<void()> maxpool2d_backward(Tensor* x, Tensor* out, std::vector<int
 std::function<void()> l2_backward(Tensor* pred, Tensor* target) {
     return [pred, target]() {
         Tensor grad_tensor = (*pred - *target) * 2;
-
         pred->add_grad(grad_tensor.data);
         target->add_grad(grad_tensor.data);
     };
@@ -204,7 +222,6 @@ std::function<void()> l2_backward(Tensor* pred, Tensor* target) {
 std::function<void()> softmax_cross_entropy_backward(Tensor* pred, Tensor* target) {
     return [pred, target]() {
         Tensor grad_tensor = *pred - *target;
-
         pred->add_grad(grad_tensor.data);
         target->add_grad(grad_tensor.data);
     };
@@ -213,7 +230,6 @@ std::function<void()> softmax_cross_entropy_backward(Tensor* pred, Tensor* targe
 std::function<void()> cross_entropy_backward(Tensor* pred, Tensor* target) {
     return [pred, target]() {
         Tensor grad_tensor = (*pred - *target) * 2;
-
         pred->add_grad(grad_tensor.data);
         target->add_grad(grad_tensor.data);
     };
@@ -246,10 +262,8 @@ std::function<void()> sigmoid_backward(Tensor* x, Tensor* out) {
     return [x, out]() {
         Tensor nx = *x * -1;
         Tensor enx = Tensor(nx.dshape, std::exp(1.0f)).pow(nx);
-
         Tensor den = (enx + 1).pow(2);
         Tensor grad = enx / den * *out->grad;
-
         x->add_grad(grad.data);
     };
 }
