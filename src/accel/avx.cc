@@ -47,14 +47,14 @@ Tensor correlate_avx(Tensor& x, Tensor& filter, DimVec stride, DimVec padding) {
     int x_size = x_height * x_width;
     int out_size = nrows * ncols;
 
-    Vec1D res_data(x.shape[0] * filter.shape[0] * out_size, 0.0f);
+    Tensor res = Tensor({x.shape[0], filter.shape[0], nrows, ncols}, 0.0f);
 
     for (int xn = 0; xn < x.shape[0]; xn++) {
 #pragma omp parallel for
         for (int n = 0; n < filter.shape[0]; n++) {
-            float* rtmp_data = &res_data[xn * filter.shape[0] * out_size + n * out_size];
             for (int ch = 0; ch < x_channels; ch++) {
                 for (int i = 0; i < nrows; i++) {
+                    float* rtmp_data = &res.data.data()[xn * filter.shape[0] * out_size + n * out_size + i * nrows];
                     int ps0 = (i - padding[0]) * stride[0];
                     for (int x_row = std::max(0, ps0); x_row < x_height && x_row < fil_height + ps0; x_row++) {
                         int f_off = n * x_channels * fil_size + ch * fil_size + (x_row - ps0) * fil_height;
@@ -68,12 +68,11 @@ Tensor correlate_avx(Tensor& x, Tensor& filter, DimVec stride, DimVec padding) {
                                 resvec = _mm256_fmadd_ps(_mm256_loadu_ps(&x.data[x_off + x_col]),
                                                          _mm256_loadu_ps(&filter.data[f_off - ps1 + x_col]), resvec);
                             }
-                            rtmp_data[i * nrows + j] += resvec[0] + resvec[1] + resvec[2] + resvec[3] + resvec[4] +
-                                                        resvec[5] + resvec[6] + resvec[7];
-
                             for (; x_col < x_width && x_col - ps1 < fil_width; x_col++) {
-                                rtmp_data[i * nrows + j] += x.data[x_off + x_col] * filter.data[f_off - ps1 + x_col];
+                                rtmp_data[j] += x.data[x_off + x_col] * filter.data[f_off - ps1 + x_col];
                             }
+                            rtmp_data[j] += resvec[0] + resvec[1] + resvec[2] + resvec[3] + resvec[4] + resvec[5] +
+                                            resvec[6] + resvec[7];
                         }
                     }
                 }
@@ -81,5 +80,5 @@ Tensor correlate_avx(Tensor& x, Tensor& filter, DimVec stride, DimVec padding) {
         }
     }
 
-    return Tensor({x.shape[0], filter.shape[0], nrows, ncols}, res_data);
+    return res;
 }

@@ -535,6 +535,10 @@ Tensor Tensor::correlate(Tensor& filter, DimVec stride, DimVec padding) {
         throw std::logic_error("correlate: Wrong shape of tensors at correlation\n x: " + this->to_string() +
                                "\n and \n filter: " + filter.to_string() + "\n");
     }
+    if (stride.size() != 2)
+        throw std::logic_error("correlate: stride should have size 2");
+    if (padding.size() != 2)
+        throw std::logic_error("correlate: padding should have size 2");
 
     CorrelateFunc cor_fn = std::bind(correlate_cpu, _1, _2, _3, _4);
     if (this->device == Device::CUDA) {

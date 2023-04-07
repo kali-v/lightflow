@@ -36,12 +36,12 @@ Tensor correlate_cpu(Tensor& x, Tensor& filter, DimVec stride, DimVec padding) {
     int x_size = x_height * x_width;
     int out_size = nrows * ncols;
 
-    Vec1D res_data(x.shape[0] * filter.shape[0] * out_size, 0.0f);
+    Tensor res = Tensor({x.shape[0], filter.shape[0], nrows, ncols}, 0.0f);
 
     for (int xn = 0; xn < x.shape[0]; xn++) {
 #pragma omp parallel for
         for (int n = 0; n < filter.shape[0]; n++) {
-            float* rtmp_data = &res_data[xn * filter.shape[0] * out_size + n * out_size];
+            float* rtmp_data = &res.data.data()[xn * filter.shape[0] * out_size + n * out_size];
             for (int ch = 0; ch < x_channels; ch++) {
                 for (int i = 0; i < nrows; i++) {
                     int ps0 = (i - padding[0]) * stride[0];
@@ -60,5 +60,5 @@ Tensor correlate_cpu(Tensor& x, Tensor& filter, DimVec stride, DimVec padding) {
         }
     }
 
-    return Tensor({x.shape[0], filter.shape[0], nrows, ncols}, res_data);
+    return res;
 }

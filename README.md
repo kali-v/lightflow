@@ -1,9 +1,8 @@
 # lightflow ⚡
 
 - Yet another deep learning framework
-- Somewhere in between of pytorch and micrograd
-- Lightweight, no 3rd party libraries required
-- Written in C++
+- Made for fun, educational purposes, and soon for paperclip maximizing
+- C++, lightweight, no 3rd party libraries required
 - CPU (+ AVX) support, CUDA soon
 
 ## Installation

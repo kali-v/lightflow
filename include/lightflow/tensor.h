@@ -96,7 +96,7 @@ class Tensor {
 
     Tensor matmul(Tensor& other);
     Tensor channelwise_sum(Tensor& other);
-    Tensor correlate(Tensor& filter, DimVec stride = {1, 1, 1}, DimVec padding = {0, 0, 0});
+    Tensor correlate(Tensor& filter, DimVec stride = {1, 1}, DimVec padding = {0, 0});
 
     int argmax();
 
