@@ -25,7 +25,7 @@ using namespace std::placeholders;
 
 float EQ_TRESHOLD = 1e-4;
 
-bool need_grad(Tensor a, Tensor b) { return a.require_grad || b.require_grad; }
+bool need_grad(Tensor a, Tensor b) { return a.requires_grad || b.requires_grad; }
 
 void check_cpu(const char* fc_name, const Device device) {
     if (device != Device::CPU)
@@ -37,6 +37,14 @@ float* _move_data_to_cuda(Vec1D host_vec) {
     cudaMalloc(&device_ptr, host_vec.size() * sizeof(float));
     cudaMemcpy(device_ptr, host_vec.data(), host_vec.size() * sizeof(float), cudaMemcpyHostToDevice);
     return device_ptr;
+}
+
+Vec1D _convert_to_vec1d(const Vec2D& data2d) {
+    Vec1D data;
+    for (const auto& row : data2d) {
+        data.insert(data.end(), row.begin(), row.end());
+    }
+    return data;
 }
 
 DimVec Tensor::get_short_shape() {
@@ -64,69 +72,38 @@ std::size_t Tensor::size() {
     return std::accumulate(this->shape.begin(), this->shape.end(), 1, std::multiplies<float>());
 }
 
-Tensor::Tensor(const std::vector<int>& shape, bool require_grad, Device device) {
-    this->shape = normalize_shape(shape);
-    this->dshape = {this->shape[2], this->shape[3]};
-    this->device = device;
-    this->data = Vec1D(this->size());
-
-    this->require_grad = require_grad;
-    if (require_grad) {
-        this->grad = new Tensor(shape, 0.0f, {}, false);
-    }
+Tensor::Tensor(const std::vector<int>& shape, bool requires_grad, Device device)
+    : shape(normalize_shape(shape)), dshape({this->shape[2], this->shape[3]}), device(device),
+      requires_grad(requires_grad), grad(requires_grad ? new Tensor(shape, 0.0f, {}, false) : nullptr) {
+    fill(0.0f);
 }
 
-Tensor::Tensor(const std::vector<int>& shape, const Vec1D tensor, std::vector<Tensor*> children, bool require_grad,
-               Device device) {
-    this->shape = normalize_shape(shape);
-    this->dshape = {this->shape[2], this->shape[3]};
-    this->device = device;
-
-    this->require_grad = require_grad;
-    if (require_grad) {
-        this->grad = new Tensor(shape, 0.0f, {}, false);
-        this->children = children;
-    }
-
+Tensor::Tensor(const std::vector<int>& shape, const Vec1D& tensor, std::vector<Tensor*> children, bool requires_grad,
+               Device device)
+    : shape(normalize_shape(shape)), dshape({this->shape[2], this->shape[3]}), device(device),
+      requires_grad(requires_grad), grad(requires_grad ? new Tensor(shape, 0.0f, {}, false) : nullptr),
+      children(children) {
     fill(tensor);
 }
 
-Tensor::Tensor(const std::vector<int>& shape, Vec2D data2d, std::vector<Tensor*> children, bool require_grad,
-               Device device) {
-    this->shape = normalize_shape(shape);
-    this->dshape = {this->shape[2], this->shape[3]};
-    this->device = device;
-
-    this->require_grad = require_grad;
-    if (require_grad) {
-        this->grad = new Tensor(shape, 0.0f, {}, false);
-        this->children = children;
-    }
-
-    Vec1D data;
-    for (Vec1D& v : data2d)
-        data.insert(data.end(), v.begin(), v.end());
-
-    fill(data);
+Tensor::Tensor(const std::vector<int>& shape, const Vec2D& tensor, std::vector<Tensor*> children, bool requires_grad,
+               Device device)
+    : shape(normalize_shape(shape)), dshape({this->shape[2], this->shape[3]}), device(device),
+      requires_grad(requires_grad), grad(requires_grad ? new Tensor(shape, 0.0f, {}, false) : nullptr),
+      children(children) {
+    fill(tensor);
 }
 
-Tensor::Tensor(const DimVec& shape, const float constant, std::vector<Tensor*> children, bool require_grad,
-               Device device) {
-    this->shape = normalize_shape(shape);
-    this->dshape = {this->shape[2], this->shape[3]};
-    this->device = device;
-
-    this->require_grad = require_grad;
-    if (require_grad) {
-        this->grad = new Tensor(shape, 0.0f, {}, false);
-        this->children = children;
-    }
-
-    fill(Vec1D(this->size(), constant));
+Tensor::Tensor(const std::vector<int>& shape, const float constant, std::vector<Tensor*> children, bool requires_grad,
+               Device device)
+    : shape(normalize_shape(shape)), dshape({this->shape[2], this->shape[3]}), device(device),
+      requires_grad(requires_grad), grad(requires_grad ? new Tensor(shape, 0.0f, {}, false) : nullptr),
+      children(children) {
+    fill(constant);
 }
 
 Tensor::~Tensor() {
-    if (!this->require_grad && this->grad) {
+    if (!this->requires_grad && this->grad) {
         delete this->grad;
     }
     this->children.clear();
@@ -148,9 +125,9 @@ Tensor Tensor::random(DimVec shape, float from, float to) {
     return rand_tensor;
 }
 
-void Tensor::fill(float value) { std::fill(this->data.begin(), this->data.end(), value); }
+void Tensor::fill(const float value) { fill(Vec1D(this->size(), value)); }
 
-void Tensor::fill(Vec1D data) {
+void Tensor::fill(const Vec1D& data) {
     if (data.size() != this->size()) {
         throw std::logic_error("Wrong size of data; got: " + std::to_string(data.size()) +
                                "; expected: " + std::to_string(this->size()));
@@ -163,6 +140,8 @@ void Tensor::fill(Vec1D data) {
         this->cu_data = _move_data_to_cuda(data);
     }
 }
+
+void Tensor::fill(const Vec2D& data) { fill(_convert_to_vec1d(data)); }
 
 void Tensor::add_grad(Vec1D grad) {
     if (this->size() != grad.size()) {
@@ -202,7 +181,7 @@ Tensor Tensor::apply(std::function<float(float)> function) {
     Vec1D res_data(this->data.size());
     std::transform(data.begin(), data.end(), res_data.begin(), function);
 
-    return Tensor(this->shape, res_data, {}, this->require_grad);
+    return Tensor(this->shape, res_data, {}, this->requires_grad);
 }
 
 Tensor Tensor::apply_operator(Tensor& other, OperationFunc operation_fn) {
@@ -253,7 +232,7 @@ Tensor Tensor::operator+(float value) {
 Tensor Tensor::operator+(Tensor& other) {
     check_cpu(__func__, this->device);
     Tensor out = apply_operator(other, add);
-    if (out.require_grad)
+    if (out.requires_grad)
         out.backward_fn = add_backward(this, &other, &out);
     return out;
 }
@@ -267,7 +246,7 @@ Tensor Tensor::operator-(float value) {
 
 Tensor Tensor::operator-(Tensor& other) {
     Tensor out = apply_operator(other, sub);
-    if (out.require_grad)
+    if (out.requires_grad)
         out.backward_fn = sub_backward(this, &other, &out);
     return out;
 }
@@ -280,7 +259,7 @@ Tensor Tensor::operator*(float value) {
 
 Tensor Tensor::operator*(Tensor& other) {
     Tensor out = apply_operator(other, mul);
-    if (out.require_grad)
+    if (out.requires_grad)
         out.backward_fn = mul_backward(this, &other, &out);
     return out;
 }
@@ -294,7 +273,7 @@ Tensor Tensor::operator/(float value) {
 
 Tensor Tensor::operator/(Tensor& other) {
     Tensor out = apply_operator(other, ddiv);
-    if (out.require_grad)
+    if (out.requires_grad)
         out.backward_fn = ddiv_backward(this, &other, &out);
     return out;
 }
@@ -310,8 +289,8 @@ Tensor Tensor::pow(Tensor& exp) {
     Vec1D nd = this->data;
     std::transform(nd.begin(), nd.end(), nd.begin(), [iexp](float& c) { return std::pow(c, iexp); });
 
-    Tensor out = Tensor(this->shape, nd, {this, &exp}, exp.require_grad);
-    if (out.require_grad)
+    Tensor out = Tensor(this->shape, nd, {this, &exp}, exp.requires_grad);
+    if (out.requires_grad)
         out.backward_fn = pow_backward(this, &exp, &out);
     return out;
 }
@@ -384,25 +363,6 @@ float Tensor::min() { return *std::min_element(std::begin(this->data), std::end(
 
 float Tensor::sum() { return std::reduce(this->data.begin(), this->data.end()); }
 
-void Tensor::_matmul_deep(Tensor& other, float* res, MatmulFunc mm) {
-    check_cpu(__func__, this->device);
-    int theight = this->dshape[0];
-    int owidth = other.dshape[1];
-    int twidth = this->dshape[1];
-    int oheight = other.dshape[0];
-
-    int i = 0;
-    for (int b0 = 0; b0 < this->shape[0]; b0++) {
-        for (int b1 = 0; b1 < this->shape[1]; b1++) {
-            int tof = b0 * this->shape[1] * theight * twidth + b1 * theight * twidth;
-            int oof = b0 * other.shape[1] * owidth * oheight + b1 * owidth * oheight;
-
-            mm(&this->data[tof], &other.data[oof], &res[i], this->dshape[0], this->dshape[1], other.dshape[1]);
-            i += theight * owidth;
-        }
-    }
-}
-
 Tensor Tensor::matmul(Tensor& other) {
     if (this->dshape[1] != other.dshape[0]) {
         throw std::logic_error("matmul error: wrong shape of tensors; " + std::to_string(this->dshape[1]) + " and " +
@@ -413,34 +373,35 @@ Tensor Tensor::matmul(Tensor& other) {
     }
 
     DimVec res_dim = {this->shape[0], this->shape[1], this->dshape[0], other.dshape[1]};
-    Vec1D res_data(this->shape[0] * this->shape[1] * this->dshape[0] * other.dshape[1], 0.0f);
+    Tensor res_tensor = Tensor(res_dim, 0.0f, {this, &other}, need_grad(*this, other));
 
-    MatmulFunc mm_fn = std::bind(matmul_cpu, _1, _2, _3, _4, _5, _6);
-    float* a_data = this->data.data();
-    float* b_data = other.data.data();
-
-    if (this->device == Device::CUDA) {
+    if (this->device == Device::CPU) {
+        MatmulFunc mm_fn;
+#ifdef LF_NO_AVX
+        mm_fn = std::bind(matmul_cpu, _1, _2, _3, _4, _5, _6);
+#else
+        mm_fn = std::bind(matmul_avx, _1, _2, _3, _4, _5, _6);
+#endif
+        if (this->shape[0] > 1 || this->shape[1] > 1)
+            _matmul_deep_cpu(*this, other, res_tensor.data.data(), mm_fn);
+        else
+            mm_fn(this->data.data(), other.data.data(), res_tensor.data.data(), this->dshape[0], this->dshape[1],
+                  other.dshape[1]);
+    } else if (this->device == Device::CUDA) {
 #ifdef LF_CUDA_AVAIL
-        mm_fn = std::bind(matmul_cuda, _1, _2, _3, _4, _5, _6);
-        a_data = this->cu_data;
-        b_data = other.cu_data;
+        if (this->shape[0] > 1 || this->shape[1] > 1)
+            matmul_deep_cuda(this->cu_data, other.cu_data, res_tensor.cu_data, this->dshape[0], this->dshape[1],
+                             other.dshape[1], this->shape[1], this->shape[0]);
+        else
+            matmul_cuda(this->cu_data, other.cu_data, res_tensor.cu_data, this->dshape[0], this->dshape[1],
+                        other.dshape[1]);
+
 #else
         std::cerr << "CUDA not available" << std::endl;
 #endif
-    } else {
-#ifndef LF_NO_AVX
-        mm_fn = std::bind(matmul_avx, _1, _2, _3, _4, _5, _6);
-#endif
     }
 
-    if (this->shape[0] > 1 || this->shape[1] > 1) {
-        _matmul_deep(other, res_data.data(), mm_fn);
-    } else {
-        mm_fn(a_data, b_data, res_data.data(), this->dshape[0], this->dshape[1], other.dshape[1]);
-    }
-
-    Tensor res_tensor = Tensor(res_dim, res_data, {this, &other}, need_grad(*this, other));
-    if (res_tensor.require_grad)
+    if (res_tensor.requires_grad)
         res_tensor.backward_fn = matmul_backward(this, &other, &res_tensor);
 
     return res_tensor;
@@ -466,7 +427,7 @@ Tensor Tensor::channelwise_sum(Tensor& other) {
         }
     }
 
-    if (res_ten.require_grad)
+    if (res_ten.requires_grad)
         res_ten.backward_fn = channelwise_sum_backward(this, &other, &res_ten);
     return res_ten;
 }
@@ -478,8 +439,8 @@ Tensor Tensor::reshape(DimVec new_shape) {
         throw std::logic_error("reshape error: sizes of tensors doesn't match");
     }
 
-    Tensor res_tensor = Tensor(new_shape, this->data, {this}, this->require_grad);
-    if (res_tensor.require_grad)
+    Tensor res_tensor = Tensor(new_shape, this->data, {this}, this->requires_grad);
+    if (res_tensor.requires_grad)
         res_tensor.backward_fn = reshape_backward(this, &res_tensor);
     return res_tensor;
 }
@@ -641,11 +602,11 @@ Tensor Tensor::rot180() {
 
 Tensor Tensor::to(Device device) {
     if (this->device == Device::CPU) {
-        return Tensor(this->shape, this->data, this->children, this->require_grad, device);
+        return Tensor(this->shape, this->data, this->children, this->requires_grad, device);
     } else {
         std::vector<float> host_data(this->size());
         cudaMemcpy(host_data.data(), this->cu_data, this->size() * sizeof(float), cudaMemcpyDeviceToHost);
-        return Tensor(this->shape, host_data, this->children, this->require_grad, device);
+        return Tensor(this->shape, host_data, this->children, this->requires_grad, device);
     }
 }
 

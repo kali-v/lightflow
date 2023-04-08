@@ -40,22 +40,22 @@ class Tensor {
     DimVec dshape;
     Device device;
 
-    bool require_grad;
+    bool requires_grad;
     Tensor* grad = nullptr;
 
     std::function<void()> backward_fn;
     std::vector<Tensor*> children;
 
-    Tensor(const DimVec& shape, bool require_grad = false, Device device = defdev);
+    Tensor(const DimVec& shape, bool requires_grad = false, Device device = defdev);
 
-    Tensor(const DimVec& shape, Vec1D tensor, std::vector<Tensor*> children = {},
-           bool require_grad = false, Device device = defdev);
+    Tensor(const DimVec& shape, const Vec1D& tensor, std::vector<Tensor*> children = {},
+           bool requires_grad = false, Device device = defdev);
 
-    Tensor(const DimVec& shape, Vec2D tensor, std::vector<Tensor*> children = {},
-           bool require_grad = false, Device device = defdev);
+    Tensor(const DimVec& shape, const Vec2D& tensor, std::vector<Tensor*> children = {},
+           bool requires_grad = false, Device device = defdev);
 
     Tensor(const DimVec& shape, const float constant, std::vector<Tensor*> children = {},
-           bool require_grad = false, Device device = defdev);
+           bool requires_grad = false, Device device = defdev);
 
     ~Tensor();
 
@@ -112,7 +112,8 @@ class Tensor {
     bool operator==(Tensor& other);
 
     void fill(float value);
-    void fill(Vec1D data);
+    void fill(const Vec1D& data);
+    void fill(const Vec2D& data);
 
     void add_grad(Vec1D grad);
     void set_grad(Vec1D grad);

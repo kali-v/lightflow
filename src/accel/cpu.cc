@@ -62,3 +62,19 @@ Tensor correlate_cpu(Tensor& x, Tensor& filter, DimVec stride, DimVec padding) {
 
     return res;
 }
+
+void _matmul_deep_cpu(Tensor& a, Tensor& b, float* res, MatmulFunc mm) {
+    int a_size = a.dshape[0] * a.dshape[1];
+    int b_size = b.dshape[0] * b.dshape[1];
+    int c_size = a.dshape[0] * b.dshape[1];
+
+    for (int b0 = 0; b0 < a.shape[0]; b0++) {
+        for (int b1 = 0; b1 < a.shape[1]; b1++) {
+            int tof = b0 * a.shape[1] * a_size + b1 * a_size;
+            int oof = b0 * b.shape[1] * b_size + b1 * b_size;
+            int rof = b0 * b.shape[1] * c_size + b1 * c_size;
+
+            mm(&a.data[tof], &b.data[oof], &res[rof], a.dshape[0], a.dshape[1], b.dshape[1]);
+        }
+    }
+}
