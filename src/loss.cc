@@ -16,6 +16,8 @@ void check_same_dims(Tensor* pred, Tensor* target) {
 }
 
 Tensor softmax_cross_entropy_loss(Tensor* pred, Tensor* target) {
+    check_cpu(__func__, pred->device);
+
     Tensor z_tensor = *pred - pred->max();
     Tensor exp_tensor = z_tensor.apply((float (*)(float))std::exp);
     Tensor pred_tensor = exp_tensor / exp_tensor.sum();
@@ -32,6 +34,8 @@ Tensor softmax_cross_entropy_loss(Tensor* pred, Tensor* target) {
 }
 
 Tensor cross_entropy_loss(Tensor* pred, Tensor* target, bool used_softmax) {
+    check_cpu(__func__, pred->device);
+
     Tensor log_tensor = pred->apply((float (*)(float))std::log);
     Tensor mul_tensor = *target * *pred;
 
@@ -42,6 +46,8 @@ Tensor cross_entropy_loss(Tensor* pred, Tensor* target, bool used_softmax) {
 }
 
 Tensor l2_loss(Tensor* pred, Tensor* target) {
+    check_cpu(__func__, pred->device);
+
     check_same_dims(pred, target);
 
     Tensor diff_tensor = *pred - *target;

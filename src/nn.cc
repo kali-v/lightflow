@@ -147,6 +147,8 @@ Tensor* Padding::forward(Tensor* x) {
 MaxPool2D::MaxPool2D(int kernel_size) { this->kernel_size = kernel_size; }
 
 Tensor* MaxPool2D::forward(Tensor* x) {
+    check_cpu(__func__, x->device);
+
     int ks = this->kernel_size;
     int x_height = x->dshape[0];
     int x_width = x->dshape[1];
@@ -252,6 +254,8 @@ std::vector<Tensor*> Sequential::parameters() {
 }
 
 Tensor& Sequential::operator()(Tensor& x) {
+    check_cpu(__func__, x.device);
+
     Tensor* lay_in = &x;
     this->layers_input.clear();
     this->layers_input.reserve(this->layers.size());

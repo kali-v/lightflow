@@ -18,6 +18,7 @@
 #endif
 #ifdef LF_CUDA_AVAIL
 #include "accel/cuda.cuh"
+#include "cuda_runtime.h"
 #endif
 
 using namespace std::placeholders;
@@ -25,6 +26,18 @@ using namespace std::placeholders;
 float EQ_TRESHOLD = 1e-4;
 
 bool need_grad(Tensor a, Tensor b) { return a.require_grad || b.require_grad; }
+
+void check_cpu(const char* fc_name, const Device device) {
+    if (device != Device::CPU)
+        throw std::logic_error(std::string(fc_name) + " not implemented for CUDA");
+}
+
+float* _move_data_to_cuda(Vec1D host_vec) {
+    float* device_ptr = nullptr;
+    cudaMalloc(&device_ptr, host_vec.size() * sizeof(float));
+    cudaMemcpy(device_ptr, host_vec.data(), host_vec.size() * sizeof(float), cudaMemcpyHostToDevice);
+    return device_ptr;
+}
 
 DimVec Tensor::get_short_shape() {
     DimVec shape = DimVec(this->shape);
@@ -54,8 +67,8 @@ std::size_t Tensor::size() {
 Tensor::Tensor(const std::vector<int>& shape, bool require_grad, Device device) {
     this->shape = normalize_shape(shape);
     this->dshape = {this->shape[2], this->shape[3]};
-    this->data = Vec1D(this->size());
     this->device = device;
+    this->data = Vec1D(this->size());
 
     this->require_grad = require_grad;
     if (require_grad) {
@@ -78,7 +91,7 @@ Tensor::Tensor(const std::vector<int>& shape, const Vec1D tensor, std::vector<Te
     fill(tensor);
 }
 
-Tensor::Tensor(const std::vector<int>& shape, const Vec2D tensor, std::vector<Tensor*> children, bool require_grad,
+Tensor::Tensor(const std::vector<int>& shape, Vec2D data2d, std::vector<Tensor*> children, bool require_grad,
                Device device) {
     this->shape = normalize_shape(shape);
     this->dshape = {this->shape[2], this->shape[3]};
@@ -90,10 +103,14 @@ Tensor::Tensor(const std::vector<int>& shape, const Vec2D tensor, std::vector<Te
         this->children = children;
     }
 
-    fill(tensor);
+    Vec1D data;
+    for (Vec1D& v : data2d)
+        data.insert(data.end(), v.begin(), v.end());
+
+    fill(data);
 }
 
-Tensor::Tensor(const std::vector<int>& shape, const float constant, std::vector<Tensor*> children, bool require_grad,
+Tensor::Tensor(const DimVec& shape, const float constant, std::vector<Tensor*> children, bool require_grad,
                Device device) {
     this->shape = normalize_shape(shape);
     this->dshape = {this->shape[2], this->shape[3]};
@@ -105,7 +122,7 @@ Tensor::Tensor(const std::vector<int>& shape, const float constant, std::vector<
         this->children = children;
     }
 
-    this->data = Vec1D(this->size(), constant);
+    fill(Vec1D(this->size(), constant));
 }
 
 Tensor::~Tensor() {
@@ -135,24 +152,15 @@ void Tensor::fill(float value) { std::fill(this->data.begin(), this->data.end(),
 
 void Tensor::fill(Vec1D data) {
     if (data.size() != this->size()) {
-        std::string message =
-            "Wrong size of data; got: " + std::to_string(data.size()) + "; expected: " + std::to_string(this->size());
-        throw std::logic_error(message);
+        throw std::logic_error("Wrong size of data; got: " + std::to_string(data.size()) +
+                               "; expected: " + std::to_string(this->size()));
     }
-    this->data = data;
-}
-
-void Tensor::fill(Vec2D data) {
-    std::size_t len = 0;
-    for (std::size_t i = 0; i < data.size(); i++) {
-        for (std::size_t j = 0; j < data[0].size(); j++) {
-            this->data.push_back(data[i][j]);
-            len++;
-        }
+    if (this->device == Device::CPU) {
+        this->data = data;
     }
-
-    if (len != this->size()) {
-        throw std::logic_error("Wrong size of data");
+    if (this->device == Device::CUDA) {
+        this->data.reserve(data.size());
+        this->cu_data = _move_data_to_cuda(data);
     }
 }
 
@@ -243,6 +251,7 @@ Tensor Tensor::operator+(float value) {
 }
 
 Tensor Tensor::operator+(Tensor& other) {
+    check_cpu(__func__, this->device);
     Tensor out = apply_operator(other, add);
     if (out.require_grad)
         out.backward_fn = add_backward(this, &other, &out);
@@ -322,8 +331,12 @@ void Tensor::operator-=(Tensor other) {
 }
 
 bool Tensor::operator==(Tensor& other) {
-    if (!has_same_shape(other))
+    if (!has_same_shape(other) || this->device != other.device)
         return false;
+
+    if (this->device == Device::CUDA) {
+        return compare_arrays_cuda(this->cu_data, other.cu_data, EQ_TRESHOLD, this->size());
+    }
 
     for (std::size_t i = 0; i < this->data.size(); i++) {
         if (fabs(this->data[i] - other.data[i]) > EQ_TRESHOLD)
@@ -372,6 +385,7 @@ float Tensor::min() { return *std::min_element(std::begin(this->data), std::end(
 float Tensor::sum() { return std::reduce(this->data.begin(), this->data.end()); }
 
 void Tensor::_matmul_deep(Tensor& other, float* res, MatmulFunc mm) {
+    check_cpu(__func__, this->device);
     int theight = this->dshape[0];
     int owidth = other.dshape[1];
     int twidth = this->dshape[1];
@@ -402,9 +416,14 @@ Tensor Tensor::matmul(Tensor& other) {
     Vec1D res_data(this->shape[0] * this->shape[1] * this->dshape[0] * other.dshape[1], 0.0f);
 
     MatmulFunc mm_fn = std::bind(matmul_cpu, _1, _2, _3, _4, _5, _6);
+    float* a_data = this->data.data();
+    float* b_data = other.data.data();
+
     if (this->device == Device::CUDA) {
 #ifdef LF_CUDA_AVAIL
         mm_fn = std::bind(matmul_cuda, _1, _2, _3, _4, _5, _6);
+        a_data = this->cu_data;
+        b_data = other.cu_data;
 #else
         std::cerr << "CUDA not available" << std::endl;
 #endif
@@ -417,7 +436,7 @@ Tensor Tensor::matmul(Tensor& other) {
     if (this->shape[0] > 1 || this->shape[1] > 1) {
         _matmul_deep(other, res_data.data(), mm_fn);
     } else {
-        mm_fn(this->data.data(), other.data.data(), res_data.data(), this->dshape[0], this->dshape[1], other.dshape[1]);
+        mm_fn(a_data, b_data, res_data.data(), this->dshape[0], this->dshape[1], other.dshape[1]);
     }
 
     Tensor res_tensor = Tensor(res_dim, res_data, {this, &other}, need_grad(*this, other));
@@ -466,6 +485,8 @@ Tensor Tensor::reshape(DimVec new_shape) {
 }
 
 Tensor Tensor::transpose() {
+    check_cpu(__func__, this->device);
+
     DimVec trans_shape = {this->shape[0], this->shape[1], this->dshape[1], this->dshape[0]};
 
     Vec1D trans_data(this->data.size());
@@ -543,7 +564,7 @@ Tensor Tensor::correlate(Tensor& filter, DimVec stride, DimVec padding) {
     CorrelateFunc cor_fn = std::bind(correlate_cpu, _1, _2, _3, _4);
     if (this->device == Device::CUDA) {
 #ifdef LF_CUDA_AVAIL
-        cor_fn = std::bind(correlate_cpu, _1, _2, _3, _4);
+        throw std::logic_error("cuda correlation not yet implemented");
 #else
         std::cerr << "CUDA not available" << std::endl;
 #endif
@@ -557,6 +578,8 @@ Tensor Tensor::correlate(Tensor& filter, DimVec stride, DimVec padding) {
 }
 
 Tensor Tensor::pad(DimVec padding, float value) {
+    check_cpu(__func__, this->device);
+
     int hpad = padding[0];
     int wpad = padding[1];
 
@@ -587,6 +610,8 @@ Tensor Tensor::pad(DimVec padding, float value) {
 }
 
 Tensor Tensor::rot180() {
+    check_cpu(__func__, this->device);
+
     int m = this->dshape[0];
     int n = this->dshape[1];
 
@@ -615,9 +640,13 @@ Tensor Tensor::rot180() {
 }
 
 Tensor Tensor::to(Device device) {
-    // TODO: actually move the data
-    this->device = device;
-    return *this;
+    if (this->device == Device::CPU) {
+        return Tensor(this->shape, this->data, this->children, this->require_grad, device);
+    } else {
+        std::vector<float> host_data(this->size());
+        cudaMemcpy(host_data.data(), this->cu_data, this->size() * sizeof(float), cudaMemcpyDeviceToHost);
+        return Tensor(this->shape, host_data, this->children, this->require_grad, device);
+    }
 }
 
 void Tensor::backward() {

@@ -3,6 +3,14 @@
 
 #include "cuda_runtime.h"
 
+__global__ void compare_arrays_kernel(float* a, float* b, float* res, float threshold, int size) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < size) {
+        if (fabs(a[i] - b[i]) > threshold)
+            atomicExch(res, 1.0f);
+    }
+}
+
 __global__ void matmul_cuda_kernel(float* a, float* b, float* c, int ah, int aw, int bw) {
     int i = blockIdx.y * blockDim.y + threadIdx.y;
     int j = blockIdx.x * blockDim.x + threadIdx.x;
@@ -16,24 +24,33 @@ __global__ void matmul_cuda_kernel(float* a, float* b, float* c, int ah, int aw,
     }
 }
 
-void matmul_cuda(float* host_a, float* host_b, float* res, int ah, int aw, int bw) {
-    size_t a_bytes = ah * aw * sizeof(float);
-    size_t b_bytes = aw * bw * sizeof(float);
+void matmul_cuda(float* a, float* b, float* res, int ah, int aw, int bw) {
     size_t c_bytes = ah * bw * sizeof(float);
 
-    float *dev_a, *dev_b, *dev_c;
-    cudaMalloc(&dev_a, a_bytes);
-    cudaMalloc(&dev_b, b_bytes);
+    float* dev_c;
     cudaMalloc(&dev_c, c_bytes);
-
-    cudaMemcpy(dev_a, host_a, a_bytes, cudaMemcpyHostToDevice);
-    cudaMemcpy(dev_b, host_b, b_bytes, cudaMemcpyHostToDevice);
 
     int bs = 32;
     dim3 grids(std::ceil(bw / (float)bs), std::ceil(ah / (float)bs));
     dim3 blocks(bs, bs);
 
-    matmul_cuda_kernel<<<grids, blocks>>>(dev_a, dev_b, dev_c, ah, aw, bw);
+    matmul_cuda_kernel<<<grids, blocks>>>(a, b, dev_c, ah, aw, bw);
 
     cudaMemcpy(res, dev_c, c_bytes, cudaMemcpyDeviceToHost);
+}
+
+bool compare_arrays_cuda(float* a, float* b, float threshold, int size) {
+    float* res;
+    cudaMallocManaged(&res, sizeof(float));
+    res[0] = 0.0;
+
+    const int blocks = 256;
+    const int grids = (size + blocks - 1) / blocks;
+    compare_arrays_kernel<<<grids, blocks>>>(a, b, res, threshold, size);
+    cudaDeviceSynchronize();
+
+    bool result = (*res == 0.0);
+    cudaFree(res);
+
+    return result;
 }

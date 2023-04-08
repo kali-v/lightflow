@@ -23,6 +23,8 @@ inline float ddiv(float a, float b) { return a / b; }
 enum class Device { CPU = 0, CUDA = 1 };
 const Device defdev = getenv("LF_DEFDEV") ? static_cast<Device>(atoi(getenv("LF_DEFDEV"))) : Device::CPU;
 
+void check_cpu(const char* fc_name, const Device device);
+
 class Tensor {
   private:
     std::size_t size();
@@ -33,7 +35,8 @@ class Tensor {
 
   public:
     Vec1D data;
-    std::vector<int> shape;
+    float* cu_data;
+    DimVec shape;
     DimVec dshape;
     Device device;
 
@@ -43,15 +46,15 @@ class Tensor {
     std::function<void()> backward_fn;
     std::vector<Tensor*> children;
 
-    Tensor(const std::vector<int>& shape, bool require_grad = false, Device device = defdev);
+    Tensor(const DimVec& shape, bool require_grad = false, Device device = defdev);
 
-    Tensor(const std::vector<int>& shape, const Vec1D tensor, std::vector<Tensor*> children = {},
+    Tensor(const DimVec& shape, Vec1D tensor, std::vector<Tensor*> children = {},
            bool require_grad = false, Device device = defdev);
 
-    Tensor(const std::vector<int>& shape, const Vec2D tensor, std::vector<Tensor*> children = {},
+    Tensor(const DimVec& shape, Vec2D tensor, std::vector<Tensor*> children = {},
            bool require_grad = false, Device device = defdev);
 
-    Tensor(const std::vector<int>& shape, const float constant, std::vector<Tensor*> children = {},
+    Tensor(const DimVec& shape, const float constant, std::vector<Tensor*> children = {},
            bool require_grad = false, Device device = defdev);
 
     ~Tensor();
@@ -72,8 +75,8 @@ class Tensor {
 
     static Tensor random(DimVec shape, float from = 0, float to = 1);
 
-    static Tensor ones(const std::vector<int> shape);
-    static Tensor zeros(const std::vector<int> shape);
+    static Tensor ones(const DimVec shape);
+    static Tensor zeros(const DimVec shape);
 
     Tensor operator+(Tensor& other);
     Tensor operator-(Tensor& other);
@@ -110,7 +113,6 @@ class Tensor {
 
     void fill(float value);
     void fill(Vec1D data);
-    void fill(Vec2D data);
 
     void add_grad(Vec1D grad);
     void set_grad(Vec1D grad);
