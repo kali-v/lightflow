@@ -27,9 +27,9 @@ void check_cpu(const char* fc_name, const Device device);
 
 class Tensor {
   private:
-    std::size_t size();
-    void check_same_shape(Tensor& other, bool allow_scalar = true);
-    DimVec get_short_shape();
+    std::size_t size() const;
+    void check_same_shape(Tensor& other, bool allow_scalar = true) const;
+    DimVec get_short_shape() const;
 
     void _matmul_deep(Tensor& other, float* res, MatmulFunc matmul_fn);
 
@@ -45,7 +45,7 @@ class Tensor {
     std::function<void()> backward_fn_;
     std::vector<Tensor*> children_;
 
-    float* cu_data = nullptr;
+    float* cu_data_ = nullptr;
 
     Tensor(const DimVec& shape, bool requires_grad = false, Device device = defdev);
 
@@ -63,13 +63,11 @@ class Tensor {
     Tensor apply(std::function<float(float)> function);
     Tensor apply_operator(Tensor& other, OperationFunc operation_fn);
 
-    Vec1D get_row(int row_num);
-    Vec1D get_col(int row_num);
     Tensor get_block(int n);
     Tensor get_channel(int channel);
-    void add_channel(Tensor& channel);
+    void add_channel(const Tensor& channel);
 
-    static DimVec normalize_shape(DimVec shape);
+    static DimVec normalize_shape(const DimVec shape);
 
     static Tensor scalar(float value);
     static Tensor scalar(int value);

@@ -19,9 +19,7 @@ void xavier_normal_init(Tensor* weights) {
     std::mt19937 gen{rd()};
     std::normal_distribution<> nd(0, stdev);
 
-    for (Vec1D::iterator it = weights->data_.begin(), end = weights->data_.end(); it != end; it++) {
-        *it = nd(gen);
-    }
+    std::generate(weights->data_.begin(), weights->data_.end(), [&]() { return nd(gen); });
 }
 
 Weight::Weight(Tensor weight) {
@@ -65,14 +63,9 @@ Tensor* Module::forward(Tensor* x) { return x; }
 
 std::vector<Tensor*> Module::parameters() { return {}; }
 
-Linear::Linear(int in_features, int out_features) {
-    this->in_features_ = in_features;
-    this->out_features_ = out_features;
-
+Linear::Linear(int in_features, int out_features)
+    : in_features_(in_features), out_features_(out_features), bias_(new Tensor({1, out_features}, .1f, {}, true)) {
     Tensor weight_tensor = Tensor({out_features, in_features}, 0.0f, {}, true);
-    xavier_normal_init(&weight_tensor);
-
-    this->bias_ = new Tensor({1, out_features}, .1f, {}, true);
     this->weight_ = new Weight(weight_tensor);
 }
 
@@ -87,22 +80,14 @@ Tensor* Linear::forward(Tensor* x) {
     return out_tensor;
 }
 
-std::vector<Tensor*> Linear::parameters() { return {this->weight_->t_weight_, this->bias_}; }
+std::vector<Tensor*> Linear::parameters() { return {this->weight_->weight_, this->bias_}; }
 
-Conv2D::Conv2D(int in_channels, int out_channels, DimVec kernel_size, DimVec stride, DimVec padding) {
-    this->in_channels_ = in_channels;
-    this->out_channels_ = out_channels;
-    this->stride_ = stride;
-    this->padding_ = padding;
-
-    this->padding_layer_ = new Padding(padding);
-
-    this->bias_ = new Tensor({1, out_channels, 1, 1}, 0.1f, {}, true);
-
-    std::vector<int> weight_shape = {out_channels, in_channels, kernel_size[0], kernel_size[1]};
-    Tensor weight_tensor = Tensor(weight_shape, 0.0f, {}, true);
+Conv2D::Conv2D(int in_channels, int out_channels, DimVec kernel_size, DimVec stride, DimVec padding)
+    : in_channels_(in_channels), out_channels_(out_channels), kernel_size_(kernel_size), stride_(stride),
+      padding_(padding), padding_layer_(new Padding(padding)),
+      bias_(new Tensor({1, out_channels, 1, 1}, 0.1f, {}, true)) {
+    Tensor weight_tensor = Tensor({out_channels, in_channels, kernel_size[0], kernel_size[1]}, 0.0f, {}, true);
     xavier_normal_init(&weight_tensor);
-
     this->weight_ = new Weight(weight_tensor);
 }
 
@@ -115,16 +100,12 @@ Conv2D::~Conv2D() {
 Tensor* Conv2D::forward(Tensor* x) {
     Tensor filter = (*this->weight_)(false);
 
-    Tensor* padded_x = x;
-    if (this->padding_[0] > 0 || this->padding_[1] > 0) {
-        padded_x = this->padding_layer_->forward(x);
-    }
+    if (this->padding_[0] > 0 || this->padding_[1] > 0) x = this->padding_layer_->forward(x);
 
-    Tensor* cor_ten = new Tensor(padded_x->correlate(filter, this->stride_));
-    cor_ten->children_ = {padded_x, this->weight_->weight_};
+    Tensor* cor_ten = new Tensor(x->correlate(filter, this->stride_));
+    cor_ten->children_ = {x, this->weight_->weight_};
     cor_ten->requires_grad_ = true;
-    cor_ten->backward_fn_ = correlate_backward(padded_x, this->weight_->weight_, cor_ten, this->stride_);
-
+    cor_ten->backward_fn_ = correlate_backward(x, this->weight_->weight_, cor_ten, this->stride_);
     return new Tensor(cor_ten->channelwise_sum(*this->bias_));
 }
 
@@ -137,14 +118,12 @@ Padding::Padding(DimVec padding, float value) {
 
 Tensor* Padding::forward(Tensor* x) {
     Tensor padded_x = x->pad(this->padding_, this->value_);
-
     Tensor* res_tensor = new Tensor(padded_x.shape_, padded_x.data_, {x}, true);
     res_tensor->backward_fn_ = pad_backward(x, this->padding_, res_tensor);
-
     return res_tensor;
 }
 
-MaxPool2D::MaxPool2D(int kernel_size) { this->kernel_size_ = kernel_size; }
+MaxPool2D::MaxPool2D(int kernel_size) : kernel_size_(kernel_size) {}
 
 Tensor* MaxPool2D::forward(Tensor* x) {
     check_cpu(__func__, x->device_);
@@ -154,11 +133,10 @@ Tensor* MaxPool2D::forward(Tensor* x) {
     int x_width = x->dshape_[1];
 
     DimVec res_shape = {x->shape_[0], x->shape_[1], x_height / ks, x_width / ks};
-    int res_size = res_shape[0] * res_shape[1] * res_shape[2] * res_shape[3];
-    Vec1D res_data;
-    res_data.reserve(res_size);
-    std::vector<int> argmaxs;
-    argmaxs.reserve(res_size);
+    int res_chan_size = res_shape[2] * res_shape[3];
+    int res_size = res_shape[0] * res_shape[1] * res_chan_size;
+    Vec1D res_data(res_size);
+    std::vector<int> argmaxs(res_size);
 
     for (int n = 0; n < x->shape_[0]; n++) {
         for (int c = 0; c < x->shape_[1]; c++) {
@@ -168,6 +146,7 @@ Tensor* MaxPool2D::forward(Tensor* x) {
                 int argmax = off;
 
                 for (int j = 0; j < x_width; j += ks) {
+                    int ri = n * res_shape[1] * res_chan_size + c * res_chan_size + i / ks * res_shape[3] + j / ks;
                     if (i + ks <= x_height && j + ks <= x_width) {
                         for (int k0 = 0; k0 < ks; k0++) {
                             for (int k1 = 1; k1 < ks; k1++) {
@@ -178,8 +157,8 @@ Tensor* MaxPool2D::forward(Tensor* x) {
                                 }
                             }
                         }
-                        argmaxs.push_back(argmax);
-                        res_data.push_back(max);
+                        argmaxs[ri] = argmax;
+                        res_data[ri] = max;
                     }
                 }
             }
@@ -199,7 +178,7 @@ Tensor* Flatten::forward(Tensor* x) {
     return res_tensor;
 }
 
-LeakyReLU::LeakyReLU(float negative_slope) { this->negative_slope_ = negative_slope; }
+LeakyReLU::LeakyReLU(float negative_slope) : negative_slope_(negative_slope) {}
 
 Tensor* LeakyReLU::forward(Tensor* x) {
     Vec1D res_data(x->data_.size());
@@ -233,7 +212,7 @@ Tensor* Sigmoid::forward(Tensor* x) {
     return res_tensor;
 }
 
-Sequential::Sequential(ModuleRef layers) { this->layers_ = layers; }
+Sequential::Sequential(ModuleRef layers) : layers_(layers) {}
 
 Sequential::~Sequential() {
     for (Module* layer : this->layers_) {

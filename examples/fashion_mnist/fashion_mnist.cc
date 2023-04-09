@@ -44,7 +44,7 @@ int main() {
         }
 
         if (i % bs == 0 && i > 0) {
-            std::cout << i << " train_loss: " << running_loss.data[0] / bs << " train_acc: " << accuracy / bs
+            std::cout << i << " train_loss: " << running_loss.data_[0] / bs << " train_acc: " << accuracy / bs
                       << std::endl;
             running_loss = Tensor::scalar(0);
             accuracy = 0;

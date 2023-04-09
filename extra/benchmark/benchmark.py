@@ -54,6 +54,27 @@ def conv(a_shape, it, task_id):
     return f"conv_{task_id}", _conv
 
 
+def linear(a_shape, it, task_id):
+    def _conv():
+        dur = 0
+        a = torch.rand(a_shape).to(device)
+        model = nn.Sequential(
+            nn.Linear(4096, 512), nn.LeakyReLU(),
+            nn.Linear(512, 256), nn.ReLU(),
+            nn.Linear(256, 50), nn.Sigmoid()
+        ).to(device)
+        loss_fn = nn.CrossEntropyLoss()
+        for _ in range(it):
+            st = time.monotonic()
+            y = model(a)
+            l = torch.rand(50).to(device)
+            z = loss_fn(y, l)
+            z.backward()
+            dur += time.monotonic() - st
+        return int(dur * 1e3)
+    return f"linear_{task_id}", _conv
+
+
 device = "cpu" if int(os.getenv("LF_DEFDEV")) == 0 else "cuda"
 mul = 1 if device == "cpu" else 2
 
@@ -67,6 +88,7 @@ tasks = [
     matmul((4096, 4096), (4096, 4096), 1 * mul),
     matmul((2048, 2048), (2048, 2048), 5 * mul),
     matmul((2, 2, 2048, 2048), (2, 2, 2048, 2048), 1 * mul),
+    linear((4096), 100 * mul, 1),
     conv_load((1, 1, 256, 256), 100 * mul, 1),
     conv((1, 1, 256, 256), 100 * mul, 1),
 ]

@@ -2,6 +2,11 @@
 #include "tensor.h"
 #include <algorithm>
 #include <cmath>
+#include <stdexcept>
+
+void check_cpu(const char* fc_name, const Device device) {
+    if (device != Device::CPU) throw std::logic_error(std::string(fc_name) + " not implemented for CUDA");
+}
 
 void matmul_cpu(float* a, float* b, float* c, int ah, int aw, int bw) {
     const int BSA = 32;

@@ -88,10 +88,8 @@ std::function<void()> pad_backward(Tensor* x, DimVec padding, Tensor* out) {
             for (int c = 0; c < out->shape_[1]; c++) {
                 int ci = c * out->shape_[2] * out->shape_[3];
                 for (int h = 0; h < out->shape_[2]; h++) {
-                    if (h < hpad)
-                        continue;
-                    if (h >= hpad + x->shape_[2])
-                        break;
+                    if (h < hpad) continue;
+                    if (h >= hpad + x->shape_[2]) break;
                     int hi = h * out->shape_[3];
                     for (int w = 0; w < out->shape_[3]; w++) {
                         if (w >= wpad && w < wpad + x->shape_[3]) {
@@ -118,6 +116,7 @@ std::function<void()> correlate_backward(Tensor* x, Tensor* filter, Tensor* out,
         int pad_out_size = pad_out.dshape_[0] * pad_out.dshape_[1];
         int out_size = out->dshape_[0] * out->dshape_[1];
 
+#pragma omp parallel for
         for (int n = 0; n < pad_out.shape_[0]; n++) {
             int nmi = n * pad_out.shape_[1] * pad_out_size;
             int ni = n * out->shape_[1] * out_size;
@@ -146,6 +145,7 @@ std::function<void()> correlate_backward(Tensor* x, Tensor* filter, Tensor* out,
             int x_size = x->dshape_[0] * x->dshape_[1];
 
             // correlate rotated filter over padded output gradient
+#pragma omp parallel for
             for (int b = 0; b < pad_out.shape_[0]; b++) {
                 Tensor pad_block = pad_out.get_block(b);
                 Tensor xblock = x->get_block(b);
@@ -176,7 +176,7 @@ std::function<void()> correlate_backward(Tensor* x, Tensor* filter, Tensor* out,
         } else {
             // compute filter grad
             Vec1D fil_grad(filter->data_.size(), 0.0f);
-
+#pragma omp parallel for
             for (int b = 0; b < pad_out.shape_[0]; b++) {
                 Tensor pad_block = pad_out.get_block(b);
                 Tensor xblock = x->get_block(b);
