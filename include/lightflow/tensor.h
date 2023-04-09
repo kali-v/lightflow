@@ -34,16 +34,16 @@ class Tensor {
     void _matmul_deep(Tensor& other, float* res, MatmulFunc matmul_fn);
 
   public:
-    Vec1D data;
-    DimVec shape;
-    DimVec dshape;
-    Device device;
+    Vec1D data_;
+    DimVec shape_;
+    DimVec dshape_;
+    Device device_;
 
-    bool requires_grad;
-    Tensor* grad = nullptr;
+    bool requires_grad_;
+    Tensor* grad_ = nullptr;
 
-    std::function<void()> backward_fn;
-    std::vector<Tensor*> children;
+    std::function<void()> backward_fn_;
+    std::vector<Tensor*> children_;
 
     float* cu_data = nullptr;
 
