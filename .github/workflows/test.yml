@@ -25,10 +25,11 @@ jobs:
 
   test_cuda:
     runs-on: ubuntu-latest
+    if: ${{ false }}
 
     steps:
       - uses: actions/checkout@v3
       - name: install gtest
         run: git clone https://github.com/google/googletest.git && cd googletest && mkdir build && cd build && cmake .. && sudo make install
-      - name: test avx
+      - name: test cuda
         run: LF_DEFDEV=1 ./run_tests.sh

@@ -443,7 +443,6 @@ TEST(GRAD, LinearRelu_1) {
     Linear* ll = new Linear(2, 1);
     ll->weight = new Weight(Tensor({1, 2}, 1.0f));
     ll->bias->fill(.0f);
-
     Sequential seq = Sequential({l, new ReLU(), ll});
     Tensor out = seq(x);
 
@@ -515,7 +514,7 @@ TEST(HIGHDIM_TENSOR_OPERATIONS, HighDimMatmul) {
         Tensor computed = a.matmul(b);
 
         Tensor expected = results[i / 2];
-
+        
         ASSERT_TRUE(computed == expected) << std::to_string(i) << " tensor; expected:\n"
                                           << expected.to_string() << "; got:\n" + computed.to_string();
     }

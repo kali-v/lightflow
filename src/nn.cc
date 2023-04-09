@@ -26,10 +26,10 @@ void xavier_normal_init(Tensor* weights) {
 
 Weight::Weight(Tensor weight) {
     this->t_weight_ = new Tensor(weight.transpose());
-    this->t_weight_->require_grad = true;
+    this->t_weight_->requires_grad = true;
 
     this->weight_ = new Tensor(weight);
-    this->weight_->require_grad = true;
+    this->weight_->requires_grad = true;
 }
 
 Weight::~Weight() {
@@ -40,11 +40,11 @@ Weight::~Weight() {
 void Weight::operator=(Tensor& weight) {
     delete this->t_weight_;
     this->t_weight_ = new Tensor(weight.transpose());
-    this->t_weight_->require_grad = true;
+    this->t_weight_->requires_grad = true;
 
     delete this->weight_;
     this->weight_ = new Tensor(weight);
-    this->weight_->require_grad = true;
+    this->weight_->requires_grad = true;
 }
 
 Tensor Weight::grad(bool from_transposed) {
@@ -122,7 +122,7 @@ Tensor* Conv2D::forward(Tensor* x) {
 
     Tensor* cor_ten = new Tensor(padded_x->correlate(filter, this->stride));
     cor_ten->children = {padded_x, this->weight->weight_};
-    cor_ten->require_grad = true;
+    cor_ten->requires_grad = true;
     cor_ten->backward_fn = correlate_backward(padded_x, this->weight->weight_, cor_ten, this->stride);
 
     return new Tensor(cor_ten->channelwise_sum(*this->bias));
@@ -147,6 +147,8 @@ Tensor* Padding::forward(Tensor* x) {
 MaxPool2D::MaxPool2D(int kernel_size) { this->kernel_size = kernel_size; }
 
 Tensor* MaxPool2D::forward(Tensor* x) {
+    check_cpu(__func__, x->device);
+
     int ks = this->kernel_size;
     int x_height = x->dshape[0];
     int x_width = x->dshape[1];
@@ -184,7 +186,7 @@ Tensor* MaxPool2D::forward(Tensor* x) {
         }
     }
 
-    Tensor* res_tensor = new Tensor(res_shape, res_data, {x}, x->require_grad);
+    Tensor* res_tensor = new Tensor(res_shape, res_data, {x}, x->requires_grad);
     res_tensor->backward_fn = maxpool2d_backward(x, res_tensor, argmaxs);
 
     return res_tensor;
@@ -205,7 +207,7 @@ Tensor* LeakyReLU::forward(Tensor* x) {
         res_data[i] = leaky_relu(x->data[i], this->negative_slope);
     };
 
-    Tensor* res_tensor = new Tensor(x->shape, res_data, {x}, x->require_grad);
+    Tensor* res_tensor = new Tensor(x->shape, res_data, {x}, x->requires_grad);
     res_tensor->backward_fn = leaky_relu_backward(x, res_tensor, this->negative_slope);
 
     return res_tensor;
@@ -252,6 +254,8 @@ std::vector<Tensor*> Sequential::parameters() {
 }
 
 Tensor& Sequential::operator()(Tensor& x) {
+    check_cpu(__func__, x.device);
+
     Tensor* lay_in = &x;
     this->layers_input.clear();
     this->layers_input.reserve(this->layers.size());
