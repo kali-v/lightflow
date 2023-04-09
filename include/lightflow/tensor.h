@@ -35,7 +35,6 @@ class Tensor {
 
   public:
     Vec1D data;
-    float* cu_data;
     DimVec shape;
     DimVec dshape;
     Device device;
@@ -46,16 +45,18 @@ class Tensor {
     std::function<void()> backward_fn;
     std::vector<Tensor*> children;
 
+    float* cu_data = nullptr;
+
     Tensor(const DimVec& shape, bool requires_grad = false, Device device = defdev);
 
-    Tensor(const DimVec& shape, const Vec1D& tensor, std::vector<Tensor*> children = {},
-           bool requires_grad = false, Device device = defdev);
+    Tensor(const DimVec& shape, const Vec1D& tensor, std::vector<Tensor*> children = {}, bool requires_grad = false,
+           Device device = defdev);
 
-    Tensor(const DimVec& shape, const Vec2D& tensor, std::vector<Tensor*> children = {},
-           bool requires_grad = false, Device device = defdev);
+    Tensor(const DimVec& shape, const Vec2D& tensor, std::vector<Tensor*> children = {}, bool requires_grad = false,
+           Device device = defdev);
 
-    Tensor(const DimVec& shape, const float constant, std::vector<Tensor*> children = {},
-           bool requires_grad = false, Device device = defdev);
+    Tensor(const DimVec& shape, const float constant, std::vector<Tensor*> children = {}, bool requires_grad = false,
+           Device device = defdev);
 
     ~Tensor();
 

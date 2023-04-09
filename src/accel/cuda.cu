@@ -3,7 +3,14 @@
 
 #include "cuda_runtime.h"
 
-__global__ void compare_arrays_kernel(float* a, float* b, float* res, float threshold, int size) {
+float* move_data_to_cuda(const float* host_ptr, const int host_size, float* dev_ptr) {
+    cudaMalloc(&dev_ptr, host_size * sizeof(float));
+    cudaMemcpy(dev_ptr, host_ptr, host_size * sizeof(float), cudaMemcpyHostToDevice);
+    return dev_ptr;
+}
+
+__global__ void compare_arrays_kernel(const float* a, const float* b, float* res, const float threshold,
+                                      const int size) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < size) {
         if (fabs(a[i] - b[i]) > threshold)
@@ -11,7 +18,7 @@ __global__ void compare_arrays_kernel(float* a, float* b, float* res, float thre
     }
 }
 
-__global__ void matmul_cuda_kernel(float* a, float* b, float* c, int ah, int aw, int bw) {
+__global__ void matmul_cuda_kernel(const float* a, const float* b, float* c, const int ah, const int aw, const int bw) {
     int i = blockIdx.y * blockDim.y + threadIdx.y;
     int j = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -24,8 +31,9 @@ __global__ void matmul_cuda_kernel(float* a, float* b, float* c, int ah, int aw,
     }
 }
 
-__global__ void matmul_deep_cuda_kernel(float* a, float* b, float* c, int ah, int aw, int bw, int ch, int bs,
-                                        int a_size, int b_size, int c_size) {
+__global__ void matmul_deep_cuda_kernel(const float* a, const float* b, float* c, const int ah, const int aw,
+                                        const int bw, const int ch, const int bs, const int a_size, const int b_size,
+                                        const int c_size) {
     int i = blockIdx.y * blockDim.y + threadIdx.y;
     int j = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -46,7 +54,7 @@ __global__ void matmul_deep_cuda_kernel(float* a, float* b, float* c, int ah, in
     }
 }
 
-bool compare_arrays_cuda(float* a, float* b, float threshold, int size) {
+bool compare_arrays_cuda(const float* a, const float* b, const float threshold, const int size) {
     float* res;
     cudaMallocManaged(&res, sizeof(float));
     res[0] = 0.0;
@@ -62,7 +70,7 @@ bool compare_arrays_cuda(float* a, float* b, float threshold, int size) {
     return result;
 }
 
-void matmul_cuda(float* a, float* b, float* res, int ah, int aw, int bw) {
+void matmul_cuda(const float* a, const float* b, float* res, const int ah, const int aw, const int bw) {
     int bs = 32;
     dim3 grids(std::ceil(bw / (float)bs), std::ceil(ah / (float)bs));
     dim3 blocks(bs, bs);
@@ -70,7 +78,8 @@ void matmul_cuda(float* a, float* b, float* res, int ah, int aw, int bw) {
     matmul_cuda_kernel<<<grids, blocks>>>(a, b, res, ah, aw, bw);
 }
 
-void matmul_deep_cuda(float* a, float* b, float* res, int ah, int aw, int bw, int ch, int bs) {
+void matmul_deep_cuda(const float* a, const float* b, float* res, const int ah, const int aw, const int bw,
+                      const int ch, const int bs) {
     int block_size = 16;
     dim3 grids(std::ceil(bw / (float)block_size), std::ceil(ah / (float)block_size));
     dim3 blocks(block_size, block_size);

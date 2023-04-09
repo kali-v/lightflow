@@ -32,13 +32,6 @@ void check_cpu(const char* fc_name, const Device device) {
         throw std::logic_error(std::string(fc_name) + " not implemented for CUDA");
 }
 
-float* _move_data_to_cuda(Vec1D host_vec) {
-    float* device_ptr = nullptr;
-    cudaMalloc(&device_ptr, host_vec.size() * sizeof(float));
-    cudaMemcpy(device_ptr, host_vec.data(), host_vec.size() * sizeof(float), cudaMemcpyHostToDevice);
-    return device_ptr;
-}
-
 Vec1D _convert_to_vec1d(const Vec2D& data2d) {
     Vec1D data;
     for (const auto& row : data2d) {
@@ -136,8 +129,12 @@ void Tensor::fill(const Vec1D& data) {
         this->data = data;
     }
     if (this->device == Device::CUDA) {
+#ifdef LF_CUDA_AVAIL
         this->data.reserve(data.size());
-        this->cu_data = _move_data_to_cuda(data);
+        move_data_to_cuda(data.data(), data.size(), this->cu_data);
+#else
+        std::cerr << "CUDA not available" << std::endl;
+#endif
     }
 }
 
