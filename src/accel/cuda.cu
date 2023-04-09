@@ -3,10 +3,13 @@
 
 #include "cuda_runtime.h"
 
-float* move_data_to_cuda(const float* host_ptr, const int host_size, float* dev_ptr) {
-    cudaMalloc(&dev_ptr, host_size * sizeof(float));
-    cudaMemcpy(dev_ptr, host_ptr, host_size * sizeof(float), cudaMemcpyHostToDevice);
-    return dev_ptr;
+void move_data_to_cuda(const float* host_ptr, const int host_size, float** dev_ptr) {
+    cudaMalloc(dev_ptr, host_size * sizeof(float));
+    cudaMemcpy(*dev_ptr, host_ptr, host_size * sizeof(float), cudaMemcpyHostToDevice);
+}
+
+void move_data_to_host(float* host_ptr, const int host_size, const float* dev_ptr) {
+    cudaMemcpy(host_ptr, dev_ptr, host_size * sizeof(float), cudaMemcpyDeviceToHost);
 }
 
 __global__ void compare_arrays_kernel(const float* a, const float* b, float* res, const float threshold,

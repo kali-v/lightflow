@@ -1,7 +1,8 @@
 #ifndef CUDA_CUH
 #define CUDA_CUH
 
-float* move_data_to_cuda(const float* host_ptr, const int host_size, float* dev_ptr);
+void move_data_to_cuda(const float* host_ptr, const int host_size, float** dev_ptr);
+void move_data_to_host(float* host_ptr, const int host_size, const float* dev_ptr);
 
 bool compare_arrays_cuda(const float* a, const float* b, const float threshold, const int size);
 

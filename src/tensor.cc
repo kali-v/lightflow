@@ -130,8 +130,7 @@ void Tensor::fill(const Vec1D& data) {
     }
     if (this->device == Device::CUDA) {
 #ifdef LF_CUDA_AVAIL
-        this->data.reserve(data.size());
-        move_data_to_cuda(data.data(), data.size(), this->cu_data);
+        move_data_to_cuda(data.data(), data.size(), &this->cu_data);
 #else
         std::cerr << "CUDA not available" << std::endl;
 #endif
@@ -602,7 +601,7 @@ Tensor Tensor::to(Device device) {
         return Tensor(this->shape, this->data, this->children, this->requires_grad, device);
     } else {
         std::vector<float> host_data(this->size());
-        cudaMemcpy(host_data.data(), this->cu_data, this->size() * sizeof(float), cudaMemcpyDeviceToHost);
+        move_data_to_host(&host_data[0], host_data.size(), this->cu_data);
         return Tensor(this->shape, host_data, this->children, this->requires_grad, device);
     }
 }
