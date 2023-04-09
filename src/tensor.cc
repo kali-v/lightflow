@@ -132,7 +132,7 @@ void Tensor::fill(const Vec1D& data) {
 #ifdef LF_CUDA_AVAIL
         move_data_to_cuda(data.data(), data.size(), &this->cu_data);
 #else
-        std::cerr << "CUDA not available" << std::endl;
+        throw std::runtime_error("CUDA not available");
 #endif
     }
 }
@@ -310,7 +310,11 @@ bool Tensor::operator==(Tensor& other) {
         return false;
 
     if (this->device == Device::CUDA) {
+#ifdef LF_CUDA_AVAIL
         return compare_arrays_cuda(this->cu_data, other.cu_data, EQ_TRESHOLD, this->size());
+#else
+        throw std::runtime_error("CUDA not available");
+#endif
     }
 
     for (std::size_t i = 0; i < this->data.size(); i++) {
@@ -391,9 +395,8 @@ Tensor Tensor::matmul(Tensor& other) {
         else
             matmul_cuda(this->cu_data, other.cu_data, res_tensor.cu_data, this->dshape[0], this->dshape[1],
                         other.dshape[1]);
-
 #else
-        std::cerr << "CUDA not available" << std::endl;
+        throw std::runtime_error("CUDA not available");
 #endif
     }
 
@@ -523,7 +526,7 @@ Tensor Tensor::correlate(Tensor& filter, DimVec stride, DimVec padding) {
 #ifdef LF_CUDA_AVAIL
         throw std::logic_error("cuda correlation not yet implemented");
 #else
-        std::cerr << "CUDA not available" << std::endl;
+        throw std::runtime_error("CUDA not available");
 #endif
     } else {
 #ifndef LF_NO_AVX
@@ -600,9 +603,13 @@ Tensor Tensor::to(Device device) {
     if (this->device == Device::CPU) {
         return Tensor(this->shape, this->data, this->children, this->requires_grad, device);
     } else {
+#ifdef LF_CUDA_AVAIL
         std::vector<float> host_data(this->size());
         move_data_to_host(&host_data[0], host_data.size(), this->cu_data);
         return Tensor(this->shape, host_data, this->children, this->requires_grad, device);
+#else
+        throw std::runtime_error("CUDA not available");
+#endif
     }
 }
 
