@@ -196,8 +196,9 @@ Tensor Tensor::operator+(float value) {
 }
 
 Tensor Tensor::operator+(Tensor& other) {
-    check_cpu(__func__, this->device_);
-    Tensor out = apply_operator(other, add);
+    Tensor out = (this->device_ == Device::CUDA) ? Tensor(this->shape_, 0.0f, {this, &other}, need_grad(*this, other))
+                                                 : apply_operator(other, add);
+    if (this->device_ == Device::CUDA) add_cuda(this->cu_data_, other.cu_data_, out.cu_data_, this->size());
     if (out.requires_grad_) out.backward_fn_ = add_backward(this, &other, &out);
     return out;
 }
@@ -209,7 +210,9 @@ Tensor Tensor::operator-(float value) {
 }
 
 Tensor Tensor::operator-(Tensor& other) {
-    Tensor out = apply_operator(other, sub);
+    Tensor out = (this->device_ == Device::CUDA) ? Tensor(this->shape_, 0.0f, {this, &other}, need_grad(*this, other))
+                                                 : apply_operator(other, sub);
+    if (this->device_ == Device::CUDA) sub_cuda(this->cu_data_, other.cu_data_, out.cu_data_, this->size());
     if (out.requires_grad_) out.backward_fn_ = sub_backward(this, &other, &out);
     return out;
 }
@@ -221,7 +224,9 @@ Tensor Tensor::operator*(float value) {
 }
 
 Tensor Tensor::operator*(Tensor& other) {
-    Tensor out = apply_operator(other, mul);
+    Tensor out = (this->device_ == Device::CUDA) ? Tensor(this->shape_, 0.0f, {this, &other}, need_grad(*this, other))
+                                                 : apply_operator(other, mul);
+    if (this->device_ == Device::CUDA) mul_cuda(this->cu_data_, other.cu_data_, out.cu_data_, this->size());
     if (out.requires_grad_) out.backward_fn_ = mul_backward(this, &other, &out);
     return out;
 }
@@ -229,29 +234,43 @@ Tensor Tensor::operator*(Tensor& other) {
 Tensor Tensor::operator/(float value) {
     Vec1D nd = this->data_;
     std::transform(nd.begin(), nd.end(), nd.begin(), [value](float& c) { return c / value; });
-
     return Tensor(this->shape_, nd);
 }
 
 Tensor Tensor::operator/(Tensor& other) {
-    Tensor out = apply_operator(other, ddiv);
+    Tensor out = (this->device_ == Device::CUDA) ? Tensor(this->shape_, 0.0f, {this, &other}, need_grad(*this, other))
+                                                 : apply_operator(other, ddiv);
+    if (this->device_ == Device::CUDA) div_cuda(this->cu_data_, other.cu_data_, out.cu_data_, this->size());
     if (out.requires_grad_) out.backward_fn_ = ddiv_backward(this, &other, &out);
     return out;
 }
 
 Tensor Tensor::pow(float exp) {
-    Vec1D nd = this->data_;
-    std::transform(nd.begin(), nd.end(), nd.begin(), [exp](float& c) { return std::pow(c, exp); });
-    return Tensor(this->shape_, nd);
+    Tensor* out = nullptr;
+    if (this->device_ == Device::CPU) {
+        Vec1D nd = this->data_;
+        std::transform(nd.begin(), nd.end(), nd.begin(), [exp](float& c) { return std::pow(c, exp); });
+        out = new Tensor(this->shape_, nd);
+    } else {
+        out = new Tensor(this->shape_, 0.0f);
+        pow_const_cuda(this->cu_data_, exp, out->cu_data_, this->size());
+    }
+    return *out;
 }
 
 Tensor Tensor::pow(Tensor& exp) {
-    int iexp = exp.data_[0];
-    Vec1D nd = this->data_;
-    std::transform(nd.begin(), nd.end(), nd.begin(), [iexp](float& c) { return std::pow(c, iexp); });
-    Tensor out = Tensor(this->shape_, nd, {this, &exp}, exp.requires_grad_);
-    if (out.requires_grad_) out.backward_fn_ = pow_backward(this, &exp, &out);
-    return out;
+    Tensor* out = nullptr;
+    if (this->device_ == Device::CPU) {
+        int iexp = exp.data_[0];
+        Vec1D nd = this->data_;
+        std::transform(nd.begin(), nd.end(), nd.begin(), [iexp](float& c) { return std::pow(c, iexp); });
+        out = new Tensor(this->shape_, nd, {this, &exp}, exp.requires_grad_);
+    } else {
+        out = new Tensor(this->shape_, 0.0f);
+        pow_cuda(this->cu_data_, exp.cu_data_, out->cu_data_, this->size());
+    }
+    if (out->requires_grad_) out->backward_fn_ = pow_backward(this, &exp, out);
+    return *out;
 }
 
 bool Tensor::has_same_shape(Tensor& other) {
@@ -518,7 +537,7 @@ Tensor Tensor::to(Device device) {
     } else {
 #ifdef LF_CUDA_AVAIL
         std::vector<float> host_data(this->size());
-        move_data_to_host(&host_data[0], host_data.size(), this->cu_data_);
+        // move_data_to_host(&host_data[0], this->cu_data_, host_data.size());
         return Tensor(this->shape_, host_data, this->children_, this->requires_grad_, device);
 #else
         throw std::runtime_error("CUDA not available");
@@ -534,12 +553,19 @@ void Tensor::backward() {
 }
 
 std::string Tensor::to_string() {
-    std::string res = "tensor(";
+    std::string res = "tensor((";
+    std::string dev = this->device_ == Device::CPU ? "cpu" : "cuda";
     std::string data_str = "[";
 
-    for (size_t i = 0; i < this->data_.size(); i++) {
-        data_str += std::to_string(this->data_[i]);
-        data_str += (i == this->data_.size() - 1) ? "]" : ", ";
+    float* tmp_data = &this->data_[0];
+    if (this->device_ == Device::CUDA) {
+        tmp_data = (float*)malloc(this->size() * sizeof(float));
+        move_data_to_host(tmp_data, this->cu_data_, this->size());
+    }
+
+    for (size_t i = 0; i < this->size(); i++) {
+        data_str += std::to_string(tmp_data[i]);
+        data_str += (i == this->size() - 1) ? "]" : ", ";
 
         if (i == 20) {
             data_str += "... ]";
@@ -552,5 +578,5 @@ std::string Tensor::to_string() {
     }
     res.pop_back();
 
-    return res + ") " + data_str;
+    return res + "), " + dev + ") " + data_str;
 }

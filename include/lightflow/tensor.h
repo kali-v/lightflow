@@ -115,6 +115,7 @@ class Tensor {
     void fill(const Vec2D& data);
 
     void add_grad(Vec1D grad);
+    void add_grad(Tensor& grad);
     void set_grad(Vec1D grad);
 
     void set_grad(Tensor* grad);
