@@ -242,12 +242,12 @@ TEST(GRAD, Add_1) {
     Tensor b = Tensor({1}, 2.0f, {}, true);
     Tensor c = a + b;
 
-    c.grad = new Tensor(c.shape, 1.0f);
+    c.grad_ = new Tensor(c.shape_, 1.0f);
     c.backward();
 
-    ASSERT_TRUE(compare_tensors(Tensor({1}, 1.0f), *(a.grad)));
-    ASSERT_TRUE(compare_tensors(Tensor({1}, 1.0f), *(b.grad)));
-    ASSERT_TRUE(compare_tensors(Tensor({1}, 1.0f), *(c.grad)));
+    ASSERT_TRUE(compare_tensors(Tensor({1}, 1.0f), *(a.grad_)));
+    ASSERT_TRUE(compare_tensors(Tensor({1}, 1.0f), *(b.grad_)));
+    ASSERT_TRUE(compare_tensors(Tensor({1}, 1.0f), *(c.grad_)));
 }
 
 TEST(GRAD, Operations_1) {
@@ -264,7 +264,7 @@ TEST(GRAD, Operations_1) {
     Tensor ee = dd - e;
     Tensor ff = ee + f;
 
-    ff.grad = new Tensor(ff.shape, 1.0f);
+    ff.grad_ = new Tensor(ff.shape_, 1.0f);
     ff.backward();
 
     std::vector<Tensor> exp_tensors = {
@@ -272,7 +272,7 @@ TEST(GRAD, Operations_1) {
         Tensor({1}, -23.4619, {}, true), Tensor({1}, -1, {}, true),      Tensor({1}, 1, {}, true),
     };
 
-    std::vector<Tensor> com_tensors = {*a.grad, *b.grad, *c.grad, *d.grad, *e.grad, *f.grad};
+    std::vector<Tensor> com_tensors = {*a.grad_, *b.grad_, *c.grad_, *d.grad_, *e.grad_, *f.grad_};
 
     for (int i = 0; i < exp_tensors.size(); i++) {
         ASSERT_TRUE(compare_tensors(exp_tensors[i], com_tensors[i], i));
@@ -286,12 +286,12 @@ TEST(GRAD, Padding_1) {
     Padding p = Padding({2, 2}, 0.0);
     Tensor* c = p.forward(a);
 
-    c->grad->fill(data[1]);
+    c->grad_->fill(data[1]);
     c->backward();
 
     Tensor exp = Tensor({2, 3, 2, 2}, data[2]);
 
-    ASSERT_TRUE(compare_tensors(exp, *a->grad));
+    ASSERT_TRUE(compare_tensors(exp, *a->grad_));
 }
 
 TEST(GRAD, MaxPool_1) {
@@ -300,12 +300,12 @@ TEST(GRAD, MaxPool_1) {
     MaxPool2D mp = MaxPool2D(2);
     Tensor* c = mp.forward(a);
 
-    c->grad->fill({1, 2, 3, 4});
+    c->grad_->fill({1, 2, 3, 4});
     c->backward();
 
     Tensor exp = Tensor({2, 2, 2, 2}, {0, 0, 0, 1, 0, 0, 0, 2, 3, 0, 0, 0, 4, 0, 0, 0});
 
-    ASSERT_TRUE(compare_tensors(exp, *a->grad));
+    ASSERT_TRUE(compare_tensors(exp, *a->grad_));
 }
 
 TEST(GRAD, MaxPool_2) {
@@ -315,13 +315,13 @@ TEST(GRAD, MaxPool_2) {
     MaxPool2D mp = MaxPool2D(2);
     Tensor* c = mp.forward(a);
 
-    c->grad->fill({1, 2, 3});
+    c->grad_->fill({1, 2, 3});
     c->backward();
 
     Tensor exp = Tensor({1, 3, 3, 3}, {0., 0., 0., 0., 1., 0., 0., 0., 0., 0., 0., 0., 0., 2.,
                                        0., 0., 0., 0., 3., 0., 0., 0., 0., 0., 0., 0., 0.});
 
-    ASSERT_TRUE(compare_tensors(exp, *a->grad));
+    ASSERT_TRUE(compare_tensors(exp, *a->grad_));
 }
 
 TEST(GRAD, Loss_1) {
@@ -337,7 +337,7 @@ TEST(GRAD, Loss_1) {
         Tensor::scalar((float)4.2),
     };
 
-    std::vector<Tensor> com_tensors = {*a.grad, *b.grad};
+    std::vector<Tensor> com_tensors = {*a.grad_, *b.grad_};
 
     for (int i = 0; i < exp_tensors.size(); i++) {
         ASSERT_TRUE(compare_tensors(exp_tensors[i], com_tensors[i], i));
@@ -357,7 +357,7 @@ TEST(GRAD, Loss_2) {
         Tensor({2, 1}, {-2, 0}),
     };
 
-    std::vector<Tensor> com_tensors = {*a.grad, *b.grad};
+    std::vector<Tensor> com_tensors = {*a.grad_, *b.grad_};
 
     for (int i = 0; i < exp_tensors.size(); i++) {
         ASSERT_TRUE(compare_tensors(exp_tensors[i], com_tensors[i], i));
@@ -375,7 +375,7 @@ TEST(GRAD, Loss_3) {
     std::vector<Tensor> exp_tensors = {Tensor({2, 2}, {{-2.2560, -92.2605}, {-0.6525, 19.5500}}),
                                        Tensor({2, 2}, {{-2.4440, 38.9376}, {-1.0350, 27.2000}})};
 
-    std::vector<Tensor> com_tensors = {*a.grad, *b.grad};
+    std::vector<Tensor> com_tensors = {*a.grad_, *b.grad_};
 
     for (int i = 0; i < exp_tensors.size(); i++) {
         ASSERT_TRUE(compare_tensors(exp_tensors[i], com_tensors[i], i));
@@ -395,7 +395,7 @@ TEST(GRAD, Loss_4) {
     std::vector<Tensor> exp_tensors = {Tensor({2, 2}, {{9.9795, 3.9074}, {75.2211, 28.9334}}),
                                        Tensor({2, 2}, {{19.0680, 19.1208}, {20.6880, 21.0968}})};
 
-    std::vector<Tensor> com_tensors = {*a.grad, *b.grad};
+    std::vector<Tensor> com_tensors = {*a.grad_, *b.grad_};
 
     for (int i = 0; i < exp_tensors.size(); i++) {
         ASSERT_TRUE(compare_tensors(exp_tensors[i], com_tensors[i], i));
@@ -406,17 +406,17 @@ TEST(GRAD, Linear_1) {
     Tensor x = Tensor({1, 3}, {1, 2, 3}, {}, true);
 
     Linear* l = new Linear(3, 2);
-    l->weight = new Weight(Tensor({2, 3}, 1.0f));
-    l->bias->fill(.0f);
+    l->weight_ = new Weight(Tensor({2, 3}, 1.0f));
+    l->bias_->fill(.0f);
 
     Linear* ll = new Linear(2, 1);
-    ll->weight = new Weight(Tensor({1, 2}, 1.0f));
-    ll->bias->fill(.0f);
+    ll->weight_ = new Weight(Tensor({1, 2}, 1.0f));
+    ll->bias_->fill(.0f);
 
     Sequential seq = Sequential({l, ll});
     Tensor z = seq(x);
 
-    z.grad->data = {1};
+    z.grad_->data_ = {1};
     z.backward();
 
     std::vector<Tensor> exp_tensors = {
@@ -426,7 +426,7 @@ TEST(GRAD, Linear_1) {
         Tensor({1, 1}, {1.0f}),
     };
 
-    std::vector<Tensor> com_tensors = {l->weight->grad(), *l->bias->grad, ll->weight->grad(), *ll->bias->grad};
+    std::vector<Tensor> com_tensors = {l->weight_->grad(), *l->bias_->grad_, ll->weight_->grad(), *ll->bias_->grad_};
 
     for (int i = 0; i < exp_tensors.size(); i++) {
         ASSERT_TRUE(compare_tensors(exp_tensors[i], com_tensors[i], i));
@@ -437,16 +437,16 @@ TEST(GRAD, LinearRelu_1) {
     Tensor x = Tensor({1, 3}, {-1, -2, 8.3}, {}, true);
 
     Linear* l = new Linear(3, 2);
-    l->weight = new Weight(Tensor({2, 3}, {-0.5, 0.5, 0.6, 0.2, -0.3, -0.34}));
-    l->bias->fill(.0f);
+    l->weight_ = new Weight(Tensor({2, 3}, {-0.5, 0.5, 0.6, 0.2, -0.3, -0.34}));
+    l->bias_->fill(.0f);
 
     Linear* ll = new Linear(2, 1);
-    ll->weight = new Weight(Tensor({1, 2}, 1.0f));
-    ll->bias->fill(.0f);
+    ll->weight_ = new Weight(Tensor({1, 2}, 1.0f));
+    ll->bias_->fill(.0f);
     Sequential seq = Sequential({l, new ReLU(), ll});
     Tensor out = seq(x);
 
-    out.grad->fill(1);
+    out.grad_->fill(1);
     out.backward();
 
     std::vector<Tensor> exp_tensors = {
@@ -456,9 +456,9 @@ TEST(GRAD, LinearRelu_1) {
         Tensor({1, 1}, {1.0f}),
     };
 
-    Tensor q = l->weight->grad();
+    Tensor q = l->weight_->grad();
 
-    std::vector<Tensor> com_tensors = {l->weight->grad(), *l->bias->grad, ll->weight->grad(), *ll->bias->grad};
+    std::vector<Tensor> com_tensors = {l->weight_->grad(), *l->bias_->grad_, ll->weight_->grad(), *ll->bias_->grad_};
 
     for (int i = 0; i < exp_tensors.size(); i++) {
         ASSERT_TRUE(compare_tensors(exp_tensors[i], com_tensors[i], i));
@@ -472,10 +472,10 @@ TEST(GRAD, Sigmoid_1) {
 
     Tensor exp = Tensor({1}, 0.1966f);
 
-    q->grad->fill(1);
+    q->grad_->fill(1);
     q->backward();
 
-    ASSERT_TRUE(compare_tensors(*x->grad, exp, 0));
+    ASSERT_TRUE(compare_tensors(*x->grad_, exp, 0));
 }
 
 TEST(GRAD, LeakyRelu_1) {
@@ -487,10 +487,10 @@ TEST(GRAD, LeakyRelu_1) {
 
     Tensor exp = Tensor({1}, 1.0f);
 
-    q->grad->fill(1);
+    q->grad_->fill(1);
     q->backward();
 
-    ASSERT_TRUE(compare_tensors(*x->grad, exp, 0));
+    ASSERT_TRUE(compare_tensors(*x->grad_, exp, 0));
 }
 
 /*
@@ -569,22 +569,22 @@ TEST(NN, Conv2D_1) {
 
     Tensor* x = new Tensor({1, 1, 2, 2}, {1, 2, 4, 5}, {}, true);
     Conv2D m = Conv2D(1, 3, {1, 1}, {1, 1}, {0, 0});
-    Tensor weight_tensor = Tensor(m.weight->weight_->shape, data[0], {}, true);
-    m.weight = new Weight(weight_tensor);
-    m.bias = new Tensor(m.bias->shape, 0.0f, {}, true);
+    Tensor weight_tensor = Tensor(m.weight_->weight_->shape_, data[0], {}, true);
+    m.weight_ = new Weight(weight_tensor);
+    m.bias_ = new Tensor(m.bias_->shape_, 0.0f, {}, true);
 
     Tensor* computed = m.forward(x);
-    computed->grad->fill(data[1]);
+    computed->grad_->fill(data[1]);
     computed->backward();
 
     Tensor expected = Tensor({1, 3, 2, 2}, data[2]);
     ASSERT_TRUE(compare_tensors(expected, *computed));
 
     Tensor exp_f_grad = Tensor({3, 1, 1, 1}, data[3]);
-    ASSERT_TRUE(compare_tensors(m.weight->grad(false), exp_f_grad));
+    ASSERT_TRUE(compare_tensors(m.weight_->grad(false), exp_f_grad));
 
     Tensor exp_x_grad = Tensor({1, 1, 2, 2}, data[4]);
-    ASSERT_TRUE(compare_tensors(*x->grad, exp_x_grad));
+    ASSERT_TRUE(compare_tensors(*x->grad_, exp_x_grad));
 }
 
 TEST(NN, Conv2D_2) {
@@ -592,25 +592,25 @@ TEST(NN, Conv2D_2) {
 
     Tensor* x = new Tensor({1, 2, 3, 3}, data[0], {}, true);
     Conv2D m = Conv2D(2, 3, {2, 2}, {1, 1}, {0, 0});
-    Tensor mw = Tensor(m.weight->weight_->shape, 1, {}, true);
-    mw.data[0] = 2;
-    mw.data[1] = 3;
-    m.weight = new Weight(mw);
-    m.bias = new Tensor(m.bias->shape, 0.0f, {}, true);
+    Tensor mw = Tensor(m.weight_->weight_->shape_, 1, {}, true);
+    mw.data_[0] = 2;
+    mw.data_[1] = 3;
+    m.weight_ = new Weight(mw);
+    m.bias_ = new Tensor(m.bias_->shape_, 0.0f, {}, true);
 
     Tensor* computed = m.forward(x);
 
-    computed->grad->fill(data[1]);
+    computed->grad_->fill(data[1]);
     computed->backward();
 
     Tensor expected = Tensor({1, 3, 2, 2}, data[2]);
     ASSERT_TRUE(compare_tensors(expected, *computed));
 
     Tensor exp_f_grad = Tensor({3, 2, 2, 2}, data[3]);
-    ASSERT_TRUE(compare_tensors(m.weight->grad(false), exp_f_grad));
+    ASSERT_TRUE(compare_tensors(m.weight_->grad(false), exp_f_grad));
 
     Tensor exp_x_grad = Tensor({1, 2, 3, 3}, data[4]);
-    ASSERT_TRUE(compare_tensors(*x->grad, exp_x_grad));
+    ASSERT_TRUE(compare_tensors(*x->grad_, exp_x_grad));
 }
 
 TEST(NN, Conv2D_3) {
@@ -618,15 +618,15 @@ TEST(NN, Conv2D_3) {
 
     Tensor* x = new Tensor({1, 2, 2, 2}, data[0], {}, true);
     Conv2D m = Conv2D(2, 3, {2, 2}, {1, 1}, {0, 0});
-    Tensor mw = Tensor(m.weight->weight_->shape, data[1], {}, true);
-    m.weight = new Weight(mw);
-    m.bias = new Tensor(m.bias->shape, 0.0f, {}, true);
+    Tensor mw = Tensor(m.weight_->weight_->shape_, data[1], {}, true);
+    m.weight_ = new Weight(mw);
+    m.bias_ = new Tensor(m.bias_->shape_, 0.0f, {}, true);
 
     Tensor* computed = m.forward(x);
 
     Tensor expected = Tensor({1, 3, 1, 1}, data[2]);
 
-    computed->grad->fill(data[3]);
+    computed->grad_->fill(data[3]);
     computed->backward();
 
     ASSERT_TRUE(compare_tensors(expected, *computed));
@@ -637,25 +637,25 @@ TEST(NN, Conv2D_4) {
 
     Tensor* x = new Tensor({1, 1, 5, 5}, 3.0, {}, true);
     Conv2D m = Conv2D(1, 1, {3, 3}, {2, 2}, {0, 0});
-    Tensor mw = Tensor(m.weight->weight_->shape, 1, {}, true);
-    mw.data[0] = 2;
-    mw.data[1] = 3;
-    m.weight = new Weight(mw);
-    m.bias = new Tensor(m.bias->shape, 0.0f, {}, true);
+    Tensor mw = Tensor(m.weight_->weight_->shape_, 1, {}, true);
+    mw.data_[0] = 2;
+    mw.data_[1] = 3;
+    m.weight_ = new Weight(mw);
+    m.bias_ = new Tensor(m.bias_->shape_, 0.0f, {}, true);
 
     Tensor* computed = m.forward(x);
 
-    computed->grad->fill({7, 1, 2, 5});
+    computed->grad_->fill({7, 1, 2, 5});
     computed->backward();
 
     Tensor expected = Tensor({1, 1, 2, 2}, data[0]);
     ASSERT_TRUE(compare_tensors(expected, *computed));
 
     Tensor exp_f_grad = Tensor({1, 1, 3, 3}, data[1]);
-    ASSERT_TRUE(compare_tensors(m.weight->grad(false), exp_f_grad));
+    ASSERT_TRUE(compare_tensors(m.weight_->grad(false), exp_f_grad));
 
     Tensor exp_x_grad = Tensor({1, 1, 5, 5}, data[2]);
-    ASSERT_TRUE(compare_tensors(*x->grad, exp_x_grad));
+    ASSERT_TRUE(compare_tensors(*x->grad_, exp_x_grad));
 }
 
 TEST(NN, Conv2D_5) {
@@ -666,22 +666,22 @@ TEST(NN, Conv2D_5) {
     Tensor* x = new Tensor({1, 1, 8, 8}, xval, {}, true);
 
     Conv2D m = Conv2D(1, 1, {3, 3}, {3, 3}, {0, 0, 0});
-    m.weight = new Weight(Tensor(m.weight->weight_->shape, data[1], {}, true));
-    m.bias = new Tensor(m.bias->shape, 0.0f, {}, true);
+    m.weight_ = new Weight(Tensor(m.weight_->weight_->shape_, data[1], {}, true));
+    m.bias_ = new Tensor(m.bias_->shape_, 0.0f, {}, true);
 
     Tensor* computed = m.forward(x);
 
-    computed->grad->fill(data[2]);
+    computed->grad_->fill(data[2]);
     computed->backward();
 
     Tensor expected = Tensor({1, 1, 2, 2}, data[3]);
     ASSERT_TRUE(compare_tensors(expected, *computed));
 
     Tensor exp_f_grad = Tensor({1, 1, 3, 3}, data[4]);
-    ASSERT_TRUE(compare_tensors(m.weight->grad(false), exp_f_grad));
+    ASSERT_TRUE(compare_tensors(m.weight_->grad(false), exp_f_grad));
 
     Tensor exp_x_grad = Tensor({1, 1, 8, 8}, data[5]);
-    ASSERT_TRUE(compare_tensors(*x->grad, exp_x_grad));
+    ASSERT_TRUE(compare_tensors(*x->grad_, exp_x_grad));
 }
 
 TEST(NN, Conv2D_6) {
@@ -692,22 +692,22 @@ TEST(NN, Conv2D_6) {
     Tensor* x = new Tensor({1, 2, 8, 8}, xval, {}, true);
 
     Conv2D m = Conv2D(2, 6, {3, 3}, {3, 3}, {0, 0, 0});
-    m.weight = new Weight(Tensor(m.weight->weight_->shape, data[1], {}, true));
-    m.bias = new Tensor(m.bias->shape, 0.0f, {}, true);
+    m.weight_ = new Weight(Tensor(m.weight_->weight_->shape_, data[1], {}, true));
+    m.bias_ = new Tensor(m.bias_->shape_, 0.0f, {}, true);
 
     Tensor* computed = m.forward(x);
 
-    computed->grad->fill(data[2]);
+    computed->grad_->fill(data[2]);
     computed->backward();
 
     Tensor expected = Tensor({1, 6, 2, 2}, data[3]);
     ASSERT_TRUE(compare_tensors(expected, *computed));
 
     Tensor exp_f_grad = Tensor({6, 2, 3, 3}, data[4]);
-    ASSERT_TRUE(compare_tensors(m.weight->grad(false), exp_f_grad));
+    ASSERT_TRUE(compare_tensors(m.weight_->grad(false), exp_f_grad));
 
     Tensor exp_x_grad = Tensor({1, 2, 8, 8}, data[5]);
-    ASSERT_TRUE(compare_tensors(*x->grad, exp_x_grad));
+    ASSERT_TRUE(compare_tensors(*x->grad_, exp_x_grad));
 }
 
 TEST(NN, Conv2D_7) {
@@ -718,22 +718,22 @@ TEST(NN, Conv2D_7) {
     Tensor* x = new Tensor({1, 2, 8, 8}, xval, {}, true);
 
     Conv2D m = Conv2D(2, 2, {3, 3}, {3, 3}, {0, 0, 0});
-    m.weight = new Weight(Tensor(m.weight->weight_->shape, data[1], {}, true));
-    m.bias = new Tensor(m.bias->shape, 0.0f, {}, true);
+    m.weight_ = new Weight(Tensor(m.weight_->weight_->shape_, data[1], {}, true));
+    m.bias_ = new Tensor(m.bias_->shape_, 0.0f, {}, true);
 
     Tensor* computed = m.forward(x);
 
-    computed->grad->fill(data[2]);
+    computed->grad_->fill(data[2]);
     computed->backward();
 
     Tensor expected = Tensor({1, 2, 2, 2}, data[3]);
     ASSERT_TRUE(compare_tensors(expected, *computed));
 
     Tensor exp_f_grad = Tensor({2, 2, 3, 3}, data[4], {}, false);
-    ASSERT_TRUE(compare_tensors(m.weight->grad(false), exp_f_grad));
+    ASSERT_TRUE(compare_tensors(m.weight_->grad(false), exp_f_grad));
 
     Tensor exp_x_grad = Tensor({1, 2, 8, 8}, data[5]);
-    ASSERT_TRUE(compare_tensors(*x->grad, exp_x_grad));
+    ASSERT_TRUE(compare_tensors(*x->grad_, exp_x_grad));
 }
 
 TEST(NN, Conv2D_8) {
@@ -741,26 +741,26 @@ TEST(NN, Conv2D_8) {
 
     Tensor* x = new Tensor({1, 1, 2, 2}, {1, 2, 4, 5}, {}, true);
     Conv2D m = Conv2D(1, 3, {1, 1}, {1, 1}, {0, 0});
-    Tensor weight_tensor = Tensor(m.weight->weight_->shape, data[0], {}, true);
-    m.weight = new Weight(weight_tensor);
-    m.bias = new Tensor({1, 3, 1, 1}, {1, 2, 3}, {}, true);
+    Tensor weight_tensor = Tensor(m.weight_->weight_->shape_, data[0], {}, true);
+    m.weight_ = new Weight(weight_tensor);
+    m.bias_ = new Tensor({1, 3, 1, 1}, {1, 2, 3}, {}, true);
 
     Tensor* computed = m.forward(x);
 
-    computed->grad->fill(data[1]);
+    computed->grad_->fill(data[1]);
     computed->backward();
 
     Tensor expected = Tensor({1, 3, 2, 2}, data[2]);
     ASSERT_TRUE(compare_tensors(expected, *computed));
 
     Tensor exp_f_grad = Tensor({3, 1, 1, 1}, data[3]);
-    ASSERT_TRUE(compare_tensors(m.weight->grad(false), exp_f_grad));
+    ASSERT_TRUE(compare_tensors(m.weight_->grad(false), exp_f_grad));
 
     Tensor exp_b_grad = Tensor({1, 3, 1, 1}, data[4]);
-    ASSERT_TRUE(compare_tensors(*m.bias->grad, exp_b_grad));
+    ASSERT_TRUE(compare_tensors(*m.bias_->grad_, exp_b_grad));
 
     Tensor exp_x_grad = Tensor({1, 1, 2, 2}, data[5]);
-    ASSERT_TRUE(compare_tensors(*x->grad, exp_x_grad));
+    ASSERT_TRUE(compare_tensors(*x->grad_, exp_x_grad));
 }
 
 TEST(NN, Conv2D_9) {
@@ -768,23 +768,23 @@ TEST(NN, Conv2D_9) {
 
     Tensor* x = new Tensor({3, 4, 4, 4}, data[0], {}, true);
     Conv2D m = Conv2D(4, 2, {2, 2}, {1, 1}, {0, 0});
-    Tensor weight_tensor = Tensor(m.weight->weight_->shape, data[1], {}, true);
-    m.weight = new Weight(weight_tensor);
-    m.bias = new Tensor({1, 2, 1, 1}, 0, {}, true);
+    Tensor weight_tensor = Tensor(m.weight_->weight_->shape_, data[1], {}, true);
+    m.weight_ = new Weight(weight_tensor);
+    m.bias_ = new Tensor({1, 2, 1, 1}, 0, {}, true);
 
     Tensor* computed = m.forward(x);
 
-    computed->grad->fill(computed->data);
+    computed->grad_->fill(computed->data_);
     computed->backward();
 
     Tensor expected = Tensor({3, 2, 3, 3}, data[2]);
     ASSERT_TRUE(compare_tensors(expected, *computed));
 
-    Tensor exp_w_grad = Tensor(m.weight->weight_->shape, data[3]);
-    ASSERT_TRUE(compare_tensors(m.weight->grad(false), exp_w_grad));
+    Tensor exp_w_grad = Tensor(m.weight_->weight_->shape_, data[3]);
+    ASSERT_TRUE(compare_tensors(m.weight_->grad(false), exp_w_grad));
 
-    Tensor exp_x_grad = Tensor(x->shape, data[4]);
-    ASSERT_TRUE(compare_tensors(*x->grad, exp_x_grad));
+    Tensor exp_x_grad = Tensor(x->shape_, data[4]);
+    ASSERT_TRUE(compare_tensors(*x->grad_, exp_x_grad));
 }
 
 TEST(NN, Deep_Conv2D_1) {
@@ -793,29 +793,29 @@ TEST(NN, Deep_Conv2D_1) {
     Tensor* x = new Tensor({1, 2, 3, 3}, data[0], {}, true);
 
     Conv2D f_layer = Conv2D(2, 3, {2, 2}, {1, 1}, {0, 0});
-    Tensor f_weight = Tensor(f_layer.weight->weight_->shape, data[1], {}, true);
-    f_layer.weight = new Weight(f_weight);
-    f_layer.bias = new Tensor(f_layer.bias->shape, 0.0f, {}, true);
+    Tensor f_weight = Tensor(f_layer.weight_->weight_->shape_, data[1], {}, true);
+    f_layer.weight_ = new Weight(f_weight);
+    f_layer.bias_ = new Tensor(f_layer.bias_->shape_, 0.0f, {}, true);
 
     Conv2D s_layer = Conv2D(3, 2, {2, 2}, {1, 1}, {0, 0});
-    Tensor s_weight = Tensor(s_layer.weight->weight_->shape, data[2], {}, true);
-    s_layer.weight = new Weight(s_weight);
-    s_layer.bias = new Tensor(s_layer.bias->shape, 0.0f, {}, true);
+    Tensor s_weight = Tensor(s_layer.weight_->weight_->shape_, data[2], {}, true);
+    s_layer.weight_ = new Weight(s_weight);
+    s_layer.bias_ = new Tensor(s_layer.bias_->shape_, 0.0f, {}, true);
 
     Tensor* computed = f_layer.forward(x);
     computed = s_layer.forward(computed);
 
-    computed->grad->fill(data[3]);
+    computed->grad_->fill(data[3]);
     computed->backward();
 
     Tensor expected = Tensor({1, 2, 1, 1}, data[4]);
     ASSERT_TRUE(compare_tensors(expected, *computed));
 
     Tensor exp_f_grad = Tensor({3, 2, 2, 2}, data[5]);
-    ASSERT_TRUE(compare_tensors(f_layer.weight->grad(false), exp_f_grad));
+    ASSERT_TRUE(compare_tensors(f_layer.weight_->grad(false), exp_f_grad));
 
     Tensor exp_x_grad = Tensor({1, 2, 3, 3}, data[6]);
-    ASSERT_TRUE(compare_tensors(*x->grad, exp_x_grad));
+    ASSERT_TRUE(compare_tensors(*x->grad_, exp_x_grad));
 }
 
 TEST(NN, Deep_Conv2D_2) {
@@ -825,26 +825,26 @@ TEST(NN, Deep_Conv2D_2) {
     Tensor* x = new Tensor({1, 2, 8, 8}, x_val, {}, true);
 
     Conv2D l = Conv2D(2, 3, {2, 2}, {2, 2}, {0, 0});
-    l.weight = new Weight(Tensor(l.weight->weight_->shape, data[1], {}, true));
-    l.bias = new Tensor(l.bias->shape, 0.0f, {}, true);
+    l.weight_ = new Weight(Tensor(l.weight_->weight_->shape_, data[1], {}, true));
+    l.bias_ = new Tensor(l.bias_->shape_, 0.0f, {}, true);
 
     Conv2D ll = Conv2D(3, 6, {3, 3}, {2, 2}, {0, 0});
-    ll.weight = new Weight(Tensor(ll.weight->weight_->shape, data[2], {}, true));
-    ll.bias = new Tensor(ll.bias->shape, 0.0f, {}, true);
+    ll.weight_ = new Weight(Tensor(ll.weight_->weight_->shape_, data[2], {}, true));
+    ll.bias_ = new Tensor(ll.bias_->shape_, 0.0f, {}, true);
 
     Tensor* computed = ll.forward(l.forward(x));
 
-    computed->grad->fill(data[3]);
+    computed->grad_->fill(data[3]);
     computed->backward();
 
     Tensor expected = Tensor({1, 6, 1, 1}, data[4]);
     ASSERT_TRUE(compare_tensors(expected, *computed));
 
     Tensor exp_ll_grad = Tensor({6, 3, 3, 3}, data[5]);
-    ASSERT_TRUE(compare_tensors(ll.weight->grad(false), exp_ll_grad));
+    ASSERT_TRUE(compare_tensors(ll.weight_->grad(false), exp_ll_grad));
 
     Tensor exp_x_grad = Tensor({1, 2, 8, 8}, data[6]);
-    ASSERT_TRUE(compare_tensors(*x->grad, exp_x_grad));
+    ASSERT_TRUE(compare_tensors(*x->grad_, exp_x_grad));
 }
 
 TEST(NN, Deep_Conv2D_3) {
@@ -853,29 +853,29 @@ TEST(NN, Deep_Conv2D_3) {
     Tensor* x = new Tensor({1, 2, 8, 8}, data[0], {}, true);
 
     Conv2D f_layer = Conv2D(2, 3, {3, 3}, {3, 3}, {1, 1});
-    Tensor f_weight = Tensor(f_layer.weight->weight_->shape, data[1], {}, true);
-    f_layer.weight = new Weight(f_weight);
-    f_layer.bias = new Tensor(f_layer.bias->shape, 0.0f, {}, true);
+    Tensor f_weight = Tensor(f_layer.weight_->weight_->shape_, data[1], {}, true);
+    f_layer.weight_ = new Weight(f_weight);
+    f_layer.bias_ = new Tensor(f_layer.bias_->shape_, 0.0f, {}, true);
 
     Conv2D s_layer = Conv2D(3, 7, {2, 2}, {3, 3}, {2, 2});
-    Tensor s_weight = Tensor(s_layer.weight->weight_->shape, data[2], {}, true);
-    s_layer.weight = new Weight(s_weight);
-    s_layer.bias = new Tensor(s_layer.bias->shape, 0.0f, {}, true);
+    Tensor s_weight = Tensor(s_layer.weight_->weight_->shape_, data[2], {}, true);
+    s_layer.weight_ = new Weight(s_weight);
+    s_layer.bias_ = new Tensor(s_layer.bias_->shape_, 0.0f, {}, true);
 
     Tensor* computed = f_layer.forward(x);
     computed = s_layer.forward(computed);
 
-    computed->grad->fill(data[3]);
+    computed->grad_->fill(data[3]);
     computed->backward();
 
     Tensor expected = Tensor({1, 7, 2, 2}, data[4]);
     ASSERT_TRUE(compare_tensors(expected, *computed));
 
     Tensor exp_f_grad = Tensor({3, 2, 3, 3}, data[5]);
-    ASSERT_TRUE(compare_tensors(f_layer.weight->grad(false), exp_f_grad));
+    ASSERT_TRUE(compare_tensors(f_layer.weight_->grad(false), exp_f_grad));
 
     Tensor exp_x_grad = Tensor({1, 2, 8, 8}, data[6]);
-    ASSERT_TRUE(compare_tensors(*x->grad, exp_x_grad));
+    ASSERT_TRUE(compare_tensors(*x->grad_, exp_x_grad));
 }
 
 int main(int argc, char** argv) {

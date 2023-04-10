@@ -10,8 +10,7 @@ inline float relu(float x) { return (x > 0) * x; }
 inline float leaky_relu(float x, float negative_slope) { return std::max(.0f, x) + negative_slope * std::min(.0f, x); }
 
 inline float sigmoid(float x) {
-    float den = 1 + std::pow(std::exp(1.0), -x);
-    return 1 / den;
+    return 1 / (1 + std::exp(-x));
 }
 
 class Weight {
@@ -40,11 +39,11 @@ class Module {
 
 class Linear : public Module {
   public:
-    int in_features;
-    int out_features;
+    int in_features_;
+    int out_features_;
 
-    Tensor* bias;
-    Weight* weight;
+    Tensor* bias_;
+    Weight* weight_;
 
     Linear(int in_features, int out_features);
     ~Linear();
@@ -56,8 +55,8 @@ class Linear : public Module {
 
 class Padding : public Module {
   public:
-    DimVec padding;
-    float value = 0.0f;
+    DimVec padding_;
+    float value_ = 0.0f;
 
     Padding(DimVec padding, float value = 0.0f);
 
@@ -73,7 +72,7 @@ class Flatten : public Module {
 
 class MaxPool2D : public Module {
   public:
-    int kernel_size;
+    int kernel_size_;
     MaxPool2D(int kernel_size);
 
     Tensor* forward(Tensor* x);
@@ -81,7 +80,7 @@ class MaxPool2D : public Module {
 
 class LeakyReLU : public Module {
   public:
-    float negative_slope;
+    float negative_slope_;
 
     LeakyReLU(float negative_slope = 0.01f);
 
@@ -102,17 +101,17 @@ class Sigmoid : public Module {
 
 class Conv2D : public Module {
   public:
-    int in_channels;
-    int out_channels;
+    int in_channels_;
+    int out_channels_;
 
-    DimVec kernel_size;
-    DimVec stride;
-    DimVec padding;
+    DimVec kernel_size_;
+    DimVec stride_;
+    DimVec padding_;
 
-    Padding* padding_layer;
+    Padding* padding_layer_;
 
-    Tensor* bias;
-    Weight* weight;
+    Tensor* bias_;
+    Weight* weight_;
 
     Conv2D(int in_channels, int out_channels, DimVec kernel_size, DimVec stride = {1}, DimVec padding = {0});
     ~Conv2D();
@@ -125,8 +124,8 @@ class Conv2D : public Module {
 typedef std::vector<Module*> ModuleRef;
 class Sequential {
   public:
-    std::vector<Tensor*> layers_input;
-    ModuleRef layers;
+    std::vector<Tensor*> layers_input_;
+    ModuleRef layers_;
 
     Sequential(ModuleRef layers);
     ~Sequential();
