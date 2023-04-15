@@ -7,46 +7,46 @@
 
 std::function<void()> add_backward(Tensor* a, Tensor* b, Tensor* out) {
     return [a, b, out]() {
-        a->add_grad(out->grad_->data_);
-        b->add_grad(out->grad_->data_);
+        a->add_grad(*out->grad_);
+        b->add_grad(*out->grad_);
     };
 }
 
 std::function<void()> sub_backward(Tensor* a, Tensor* b, Tensor* out) {
     return [a, b, out]() {
-        a->add_grad(out->grad_->data_);
-        b->add_grad((*out->grad_ * -1).data_);
+        a->add_grad(*out->grad_);
+        b->add_grad(*out->grad_ * Tensor::scalar(-1));
     };
 }
 
 std::function<void()> mul_backward(Tensor* a, Tensor* b, Tensor* out) {
     return [a, b, out]() {
-        a->add_grad((*b * *out->grad_).data_);
-        b->add_grad((*a * *out->grad_).data_);
+        a->add_grad(*b * *out->grad_);
+        b->add_grad(*a * *out->grad_);
     };
 }
 
 std::function<void()> ddiv_backward(Tensor* a, Tensor* b, Tensor* out) {
     return [a, b, out]() {
         Tensor a_grad_tensor = b->pow(-1);
-
         Tensor pow_tensor = b->pow(2);
-        Tensor b_grad_tensor = *a / pow_tensor * -1;
+        Tensor b_grad_tensor = *a / pow_tensor * Tensor::scalar(-1);
 
-        a->add_grad((a_grad_tensor * *out->grad_).data_);
-        b->add_grad((b_grad_tensor * *out->grad_).data_);
+        a->add_grad(a_grad_tensor * *out->grad_);
+        b->add_grad(b_grad_tensor * *out->grad_);
     };
 }
 
 std::function<void()> pow_backward(Tensor* a, Tensor* exp, Tensor* out) {
     return [a, exp, out]() {
-        Tensor a_grad_tensor = (*exp * *a).pow(exp->data_[0] - 1);
+        Tensor sub_exp = *exp - Tensor::scalar(1);
+        Tensor a_grad_tensor = (*exp * *a).pow(sub_exp);
 
-        Tensor log_tensor = a->apply((float (*)(float))std::log);
-        Tensor pow_tensor = a->pow(exp->data_[0]);
+        Tensor log_tensor = a->log();
+        Tensor pow_tensor = a->pow(*exp);
 
-        a->add_grad((a_grad_tensor * *out->grad_).data_);
-        exp->add_grad((log_tensor * pow_tensor * *out->grad_).data_);
+        a->add_grad(a_grad_tensor * *out->grad_);
+        exp->add_grad(log_tensor * pow_tensor * *out->grad_);
     };
 }
 
@@ -55,14 +55,14 @@ std::function<void()> matmul_backward(Tensor* a, Tensor* b, Tensor* out) {
         Tensor a_trans = a->transpose();
         Tensor b_trans = b->transpose();
 
-        a->add_grad((out->grad_->matmul(b_trans)).data_);
-        b->add_grad((a_trans.matmul(*out->grad_)).data_);
+        a->add_grad(out->grad_->matmul(b_trans));
+        b->add_grad(a_trans.matmul(*out->grad_));
     };
 }
 
 std::function<void()> channelwise_sum_backward(Tensor* a, Tensor* b, Tensor* out) {
     return [a, b, out]() {
-        a->add_grad(out->grad_->data_);
+        a->add_grad(*out->grad_);
 
         Vec1D grad(b->data_.size(), 0.0f);
         int out_wh = out->shape_[2] * out->shape_[3];
@@ -71,7 +71,7 @@ std::function<void()> channelwise_sum_backward(Tensor* a, Tensor* b, Tensor* out
                 grad[c] += out->grad_->data_[c * out_wh + i];
             }
         }
-        b->add_grad(grad);
+        b->add_grad(Tensor(b->shape_, grad));
     };
 }
 

@@ -69,8 +69,8 @@ class Tensor {
 
     static DimVec normalize_shape(const DimVec shape);
 
-    static Tensor scalar(float value);
-    static Tensor scalar(int value);
+    static Tensor& scalar(float value);
+    static Tensor& scalar(int value);
 
     static Tensor random(DimVec shape, float from = 0, float to = 1);
 
@@ -90,6 +90,7 @@ class Tensor {
     Tensor pow(Tensor& other);
     Tensor pow(float other);
     Tensor sqrt();
+    Tensor log();
 
     Tensor reshape(DimVec new_shape);
     Tensor transpose();
@@ -115,9 +116,9 @@ class Tensor {
     void fill(const Vec2D& data);
 
     void add_grad(Vec1D grad);
-    void add_grad(Tensor& grad);
-    void set_grad(Vec1D grad);
+    void add_grad(const Tensor grad);
 
+    void set_grad(Vec1D grad);
     void set_grad(Tensor* grad);
 
     bool has_same_shape(Tensor& other);

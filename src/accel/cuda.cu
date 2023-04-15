@@ -42,6 +42,20 @@ __global__ void div_kernel(const float* a, const float* b, float* c, int size) {
     }
 }
 
+__global__ void sqrt_kernel(const float* a, float* b, int size) {
+    int i = threadIdx.x + blockIdx.x * blockDim.x;
+    if (i < size) {
+        b[i] = sqrtf(a[i]);
+    }
+}
+
+__global__ void log_kernel(const float* a, float* b, int size) {
+    int i = threadIdx.x + blockIdx.x * blockDim.x;
+    if (i < size) {
+        b[i] = logf(a[i]);
+    }
+}
+
 __global__ void pow_kernel(const float* a, const float* exp, float* c, int size) {
     int i = threadIdx.x + blockIdx.x * blockDim.x;
     if (i < size) {
@@ -134,6 +148,18 @@ void pow_cuda(const float* a, const float* exp, float* c, int size) {
     int block_size = 256;
     int num_blocks = (size + block_size - 1) / block_size;
     pow_kernel<<<num_blocks, block_size>>>(a, exp, c, size);
+}
+
+void sqrt_cuda(const float* a, float* b, int size) {
+    int block_size = 256;
+    int num_blocks = (size + block_size - 1) / block_size;
+    sqrt_kernel<<<num_blocks, block_size>>>(a, b, size);
+}
+
+void log_cuda(const float* a, float* b, int size) {
+    int block_size = 256;
+    int num_blocks = (size + block_size - 1) / block_size;
+    log_kernel<<<num_blocks, block_size>>>(a, b, size);
 }
 
 bool compare_arrays_cuda(const float* a, const float* b, const float threshold, const int size) {

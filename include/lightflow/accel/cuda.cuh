@@ -16,5 +16,7 @@ void mul_cuda(const float* a, const float* b, float* c, int size);
 void div_cuda(const float* a, const float* b, float* c, int size);
 void pow_cuda(const float* a, const float* exp, float* c, int size);
 void pow_const_cuda(const float* a, const float exp, float* c, int size);
+void log_cuda(const float* a, float* b, int size);
+void sqrt_cuda(const float* a, float* b, int size);
 
 #endif

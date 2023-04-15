@@ -94,9 +94,9 @@ Tensor::~Tensor() {
     this->data_.shrink_to_fit();
 };
 
-Tensor Tensor::scalar(float value) { return Tensor({1}, value); }
+Tensor& Tensor::scalar(float value) { return *(new Tensor({1}, {value})); }
 
-Tensor Tensor::scalar(int value) { return Tensor({1}, (float)value); }
+Tensor& Tensor::scalar(int value) { return *(new Tensor({1}, {(float)value})); }
 
 Tensor Tensor::random(DimVec shape, float from, float to) {
     int size = std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<float>());
@@ -136,6 +136,20 @@ void Tensor::add_grad(Vec1D grad) {
 
     auto gradib = this->grad_->data_.begin();
     std::transform(gradib, this->grad_->data_.end(), grad.begin(), gradib, std::plus<float>());
+}
+
+void Tensor::add_grad(const Tensor grad) {
+    if (this->size() != grad.size())
+        throw std::logic_error("Wrong size of gradient; expected size: " + std::to_string(this->size()) +
+                               " passed size: " + std::to_string(grad.size()));
+
+    if (this->grad_ == nullptr) this->grad_ = new Tensor(this->shape_, 0.0f);
+    if (this->device_ == Device::CPU) {
+        auto gradib = this->grad_->data_.begin();
+        std::transform(gradib, this->grad_->data_.end(), grad.data_.begin(), gradib, std::plus<float>());
+    } else {
+        add_cuda(this->grad_->cu_data_, grad.cu_data_, this->grad_->cu_data_, grad.size());
+    }
 }
 
 void Tensor::set_grad(Vec1D grad) {
@@ -266,7 +280,7 @@ Tensor Tensor::pow(Tensor& exp) {
         std::transform(nd.begin(), nd.end(), nd.begin(), [iexp](float& c) { return std::pow(c, iexp); });
         out = new Tensor(this->shape_, nd, {this, &exp}, exp.requires_grad_);
     } else {
-        out = new Tensor(this->shape_, 0.0f);
+        out = new Tensor(this->shape_, 0.0f, {this, &exp}, exp.requires_grad_);
         pow_cuda(this->cu_data_, exp.cu_data_, out->cu_data_, this->size());
     }
     if (out->requires_grad_) out->backward_fn_ = pow_backward(this, &exp, out);
@@ -324,6 +338,18 @@ Tensor Tensor::sqrt() {
     Vec1D nd(this->data_);
     std::transform(nd.begin(), nd.end(), nd.begin(), (float (*)(float))std::sqrt);
     return Tensor(this->shape_, nd);
+}
+
+Tensor Tensor::log() {
+    Tensor* out = nullptr;
+    if (this->device_ == Device::CPU) {
+        out = new Tensor(this->shape_, this->data_);
+        std::transform(out->data_.begin(), out->data_.end(), out->data_.begin(), (float (*)(float))std::log);
+    } else {
+        out = new Tensor(this->shape_, 0.0f);
+        log_cuda(this->cu_data_, out->cu_data_, this->size());
+    }
+    return *out;
 }
 
 float Tensor::max() { return *std::max_element(std::begin(this->data_), std::end(this->data_)); }
