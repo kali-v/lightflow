@@ -80,12 +80,42 @@ __global__ void exp_kernel(const float* a, float* b, int size) {
         b[i] = __expf(a[i]);
     }
 }
+
+__global__ void sigmoid_kernel(const float* a, float* b, int size) {
+    int i = threadIdx.x + blockIdx.x * blockDim.x;
+    if (i < size) {
+        b[i] = 1 / 1 + __expf(-a[i]);
+    }
+}
+
+__global__ void leaky_relu_kernel(const float* a, float* b, const float neg_slope, const int size) {
+    int i = threadIdx.x + blockIdx.x * blockDim.x;
+    if (i < size) {
+        b[i] = (a[i] > 0 ? a[i] : 0) + neg_slope * (a[i] < 0 ? a[i] : 0);
+    }
+}
+
+__global__ void leaky_relu_backward_kernel(const float* a, const float* b, float* grad, float neg_slope, int size) {
+    int i = threadIdx.x + blockIdx.x * blockDim.x;
+    if (i < size) {
+        grad[i] = ((a[i] > 0) ? 1 : neg_slope) * b[i];
+    }
+}
+
 __global__ void relu_kernel(const float* a, float* b, int size) {
     int i = threadIdx.x + blockIdx.x * blockDim.x;
     if (i < size) {
         b[i] = a[i] > 0 ? a[i] : 0;
     }
 }
+
+__global__ void relu_backward_kernel(const float* a, const float* b, float* grad, int size) {
+    int i = threadIdx.x + blockIdx.x * blockDim.x;
+    if (i < size) {
+        grad[i] = a[i] > 0 ? b[i] : 0;
+    }
+}
+
 __global__ void log_kernel(const float* a, float* b, int size) {
     int i = threadIdx.x + blockIdx.x * blockDim.x;
     if (i < size) {
@@ -167,7 +197,7 @@ __global__ void transpose_kernel(const float* a, float* res, int bs, int ch, int
     }
 }
 
-void add_cuda(const float* a, const float* b, float* c, int asize, int bsize) {
+void add_cuda(const float* a, const float* b, float* c, const int asize, const int bsize) {
     int block_size = 256;
     int num_blocks = (asize + block_size - 1) / block_size;
     if (bsize == 1)
@@ -176,7 +206,7 @@ void add_cuda(const float* a, const float* b, float* c, int asize, int bsize) {
         add_kernel<<<num_blocks, block_size>>>(a, b, c, asize);
 }
 
-void sub_cuda(const float* a, const float* b, float* c, int asize, int bsize) {
+void sub_cuda(const float* a, const float* b, float* c, const int asize, const int bsize) {
     int block_size = 256;
     int num_blocks = (asize + block_size - 1) / block_size;
     if (bsize == 1)
@@ -185,7 +215,7 @@ void sub_cuda(const float* a, const float* b, float* c, int asize, int bsize) {
         sub_kernel<<<num_blocks, block_size>>>(a, b, c, asize);
 }
 
-void mul_cuda(const float* a, const float* b, float* c, int asize, int bsize) {
+void mul_cuda(const float* a, const float* b, float* c, const int asize, const int bsize) {
     int block_size = 256;
     int num_blocks = (asize + block_size - 1) / block_size;
     if (bsize == 1)
@@ -194,7 +224,7 @@ void mul_cuda(const float* a, const float* b, float* c, int asize, int bsize) {
         mul_kernel<<<num_blocks, block_size>>>(a, b, c, asize);
 }
 
-void div_cuda(const float* a, const float* b, float* c, int asize, int bsize) {
+void div_cuda(const float* a, const float* b, float* c, const int asize, const int bsize) {
     int block_size = 256;
     int num_blocks = (asize + block_size - 1) / block_size;
     if (bsize == 1)
@@ -203,40 +233,64 @@ void div_cuda(const float* a, const float* b, float* c, int asize, int bsize) {
         div_kernel<<<num_blocks, block_size>>>(a, b, c, asize);
 }
 
-void pow_const_cuda(const float* a, const float exp, float* c, int size) {
+void pow_const_cuda(const float* a, const float exp, float* c, const int size) {
     int block_size = 256;
     int num_blocks = (size + block_size - 1) / block_size;
     pow_const_kernel<<<num_blocks, block_size>>>(a, exp, c, size);
 }
 
-void pow_cuda(const float* a, const float* exp, float* c, int size) {
+void pow_cuda(const float* a, const float* exp, float* c, const int size) {
     int block_size = 256;
     int num_blocks = (size + block_size - 1) / block_size;
     pow_kernel<<<num_blocks, block_size>>>(a, exp, c, size);
 }
 
-void sqrt_cuda(const float* a, float* b, int size) {
+void sqrt_cuda(const float* a, float* b, const int size) {
     int block_size = 256;
     int num_blocks = (size + block_size - 1) / block_size;
     sqrt_kernel<<<num_blocks, block_size>>>(a, b, size);
 }
 
-void log_cuda(const float* a, float* b, int size) {
+void log_cuda(const float* a, float* b, const int size) {
     int block_size = 256;
     int num_blocks = (size + block_size - 1) / block_size;
     log_kernel<<<num_blocks, block_size>>>(a, b, size);
 }
 
-void exp_cuda(const float* a, float* b, int size) {
+void exp_cuda(const float* a, float* b, const int size) {
     int block_size = 256;
     int num_blocks = (size + block_size - 1) / block_size;
     exp_kernel<<<num_blocks, block_size>>>(a, b, size);
 }
 
-void relu_cuda(const float* a, float* b, int size) {
+void sigmoid_cuda(const float* a, float* b, const int size) {
+    int block_size = 256;
+    int num_blocks = (size + block_size - 1) / block_size;
+    sigmoid_kernel<<<num_blocks, block_size>>>(a, b, size);
+}
+
+void relu_cuda(const float* a, float* b, const int size) {
     int block_size = 256;
     int num_blocks = (size + block_size - 1) / block_size;
     relu_kernel<<<num_blocks, block_size>>>(a, b, size);
+}
+
+void leaky_relu_cuda(const float* a, float* c, const float neg_slope, const int size) {
+    int block_size = 256;
+    int num_blocks = (size + block_size - 1) / block_size;
+    leaky_relu_kernel<<<num_blocks, block_size>>>(a, c, neg_slope, size);
+}
+
+void leaky_relu_backward_cuda(const float* a, const float* b, float* c, float neg_slope, const int size) {
+    int block_size = 256;
+    int num_blocks = (size + block_size - 1) / block_size;
+    leaky_relu_backward_kernel<<<num_blocks, block_size>>>(a, b, c, neg_slope, size);
+}
+
+void relu_backward_cuda(const float* a, const float* b, float* grad, const int size) {
+    int block_size = 256;
+    int num_blocks = (size + block_size - 1) / block_size;
+    relu_backward_kernel<<<num_blocks, block_size>>>(a, b, grad, size);
 }
 
 bool compare_arrays_cuda(const float* a, const float* b, const float threshold, const int size) {

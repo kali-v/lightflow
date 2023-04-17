@@ -12,16 +12,20 @@ void matmul_deep_cuda(const float* a, const float* b, float* res, const int ah, 
 
 void transpose_cuda(const float* a, float* res, const int bs, const int ch, const int w, const int h);
 
-void add_cuda(const float* a, const float* b, float* c, int asize, int bsize);
-void sub_cuda(const float* a, const float* b, float* c, int asize, int bsize);
-void mul_cuda(const float* a, const float* b, float* c, int asize, int bsize);
-void div_cuda(const float* a, const float* b, float* c, int asize, int bsize);
-void pow_cuda(const float* a, const float* exp, float* c, int size);
-void pow_const_cuda(const float* a, const float exp, float* c, int size);
-void log_cuda(const float* a, float* b, int size);
-void sqrt_cuda(const float* a, float* b, int size);
-void exp_cuda(const float* a, float* b, int size);
+void add_cuda(const float* a, const float* b, float* c, const int asize, const int bsize);
+void sub_cuda(const float* a, const float* b, float* c, const int asize, const int bsize);
+void mul_cuda(const float* a, const float* b, float* c, const int asize, const int bsize);
+void div_cuda(const float* a, const float* b, float* c, const int asize, const int bsize);
+void pow_cuda(const float* a, const float* exp, float* c, const int size);
+void pow_const_cuda(const float* a, const float exp, float* c, const int size);
+void log_cuda(const float* a, float* b, const int size);
+void sqrt_cuda(const float* a, float* b, const int size);
+void exp_cuda(const float* a, float* b, const int size);
 
-void relu_cuda(const float* a, float* b, int size);
+void relu_cuda(const float* a, float* b, const int size);
+void relu_backward_cuda(const float* a, const float* b, float* grad, const int size);
+void leaky_relu_cuda(const float* a, float* c, const float neg_slope, const int size);
+void leaky_relu_backward_cuda(const float* a, const float* b, float* c, float neg_slope, const int size);
+void sigmoid_cuda(const float* a, float* b, const int size);
 
 #endif

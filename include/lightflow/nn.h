@@ -5,14 +5,6 @@
 #ifndef NN_H
 #define NN_H
 
-inline float relu(float x) { return (x > 0) * x; }
-
-inline float leaky_relu(float x, float negative_slope) { return std::max(.0f, x) + negative_slope * std::min(.0f, x); }
-
-inline float sigmoid(float x) {
-    return 1 / (1 + std::exp(-x));
-}
-
 class Weight {
   public:
     Tensor* weight_;

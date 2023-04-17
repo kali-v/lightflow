@@ -5,6 +5,11 @@
 
 #include "tensor.h"
 
+#ifdef LF_CUDA_AVAIL
+#include "accel/cuda.cuh"
+#include "cuda_runtime.h"
+#endif
+
 std::function<void()> add_backward(Tensor* a, Tensor* b, Tensor* out) {
     return [a, b, out]() {
         a->add_grad(*out->grad_);
@@ -237,24 +242,35 @@ std::function<void()> cross_entropy_backward(Tensor* pred, Tensor* target) {
 
 std::function<void()> relu_backward(Tensor* x, Tensor* out) {
     return [x, out]() {
-        std::vector<float> data;
-        for (std::size_t i = 0; i < x->data_.size(); i++) {
-            data.push_back((x->data_[i] > 0) * out->grad_->data_[i]);
+        if (x->device_ == Device::CPU) {
+            std::vector<float> data;
+            for (std::size_t i = 0; i < x->size(); i++) {
+                data.push_back((x->data_[i] > 0) * out->grad_->data_[i]);
+            }
+            x->add_grad(data);
+        } else {
+            Tensor grad = Tensor(x->shape_, 0.0f);
+            relu_backward_cuda(x->cu_data_, out->grad_->cu_data_, grad.cu_data_, x->size());
+            x->add_grad(grad);
         }
-
-        x->add_grad(data);
     };
 }
 
 std::function<void()> leaky_relu_backward(Tensor* x, Tensor* out, float negative_slope) {
     return [x, out, negative_slope]() {
-        std::vector<float> data(x->data_.size());
-        for (std::size_t i = 0; i < x->data_.size(); i++) {
-            float slope = (x->data_[i] > 0) ? 1 : negative_slope;
-            data[i] = slope * out->grad_->data_[i];
-        }
+        if (x->device_ == Device::CPU) {
 
-        x->add_grad(data);
+            std::vector<float> data(x->data_.size());
+            for (std::size_t i = 0; i < x->data_.size(); i++) {
+                float slope = (x->data_[i] > 0) ? 1 : negative_slope;
+                data[i] = slope * out->grad_->data_[i];
+            }
+            x->add_grad(data);
+        } else {
+            Tensor grad = Tensor(x->shape_, 0.0f);
+            leaky_relu_backward_cuda(x->cu_data_, out->grad_->cu_data_, grad.cu_data_, negative_slope, x->size());
+            x->add_grad(grad);
+        }
     };
 }
 
@@ -262,8 +278,8 @@ std::function<void()> sigmoid_backward(Tensor* x, Tensor* out) {
     return [x, out]() {
         Tensor nx = *x * Tensor::scalar(-1);
         Tensor enx = Tensor(nx.dshape_, std::exp(1.0f)).pow(nx);
-        Tensor den = (enx + 1).pow(Tensor::scalar(2));
+        Tensor den = (enx + Tensor::scalar(1)).pow(Tensor::scalar(2));
         Tensor grad = enx / den * *out->grad_;
-        x->add_grad(grad.data_);
+        x->add_grad(grad);
     };
 }

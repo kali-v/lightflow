@@ -27,13 +27,13 @@ void check_cpu(const char* fc_name, const Device device);
 
 class Tensor {
   private:
-    std::size_t size() const;
     void check_same_shape(Tensor& other, bool allow_scalar = true) const;
     DimVec get_short_shape() const;
 
     void _matmul_deep(Tensor& other, float* res, MatmulFunc matmul_fn);
 
   public:
+    std::size_t size() const;
     Vec1D data_;
     DimVec shape_;
     DimVec dshape_;

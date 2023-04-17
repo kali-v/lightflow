@@ -416,7 +416,7 @@ TEST(GRAD, Linear_1) {
     Sequential seq = Sequential({l, ll});
     Tensor z = seq(x);
 
-    z.grad_->data_ = {1};
+    z.grad_->fill(1.0f);
     z.backward();
 
     std::vector<Tensor> exp_tensors = {
@@ -446,7 +446,7 @@ TEST(GRAD, LinearRelu_1) {
     Sequential seq = Sequential({l, new ReLU(), ll});
     Tensor out = seq(x);
 
-    out.grad_->fill(1);
+    out.grad_->fill(1.0f);
     out.backward();
 
     std::vector<Tensor> exp_tensors = {
@@ -455,8 +455,6 @@ TEST(GRAD, LinearRelu_1) {
         Tensor({1, 2}, {4.48, 0}),
         Tensor({1, 1}, {1.0f}),
     };
-
-    Tensor q = l->weight_->grad();
 
     std::vector<Tensor> com_tensors = {l->weight_->grad(), *l->bias_->grad_, ll->weight_->grad(), *ll->bias_->grad_};
 
