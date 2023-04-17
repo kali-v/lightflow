@@ -10,13 +10,18 @@ void matmul_cuda(const float* a, const float* other, float* res, const int ah, c
 void matmul_deep_cuda(const float* a, const float* b, float* res, const int ah, const int aw, const int bw,
                       const int ch, const int bs);
 
-void add_cuda(const float* a, const float* b, float* c, int size);
-void sub_cuda(const float* a, const float* b, float* c, int size);
-void mul_cuda(const float* a, const float* b, float* c, int size);
-void div_cuda(const float* a, const float* b, float* c, int size);
+void transpose_cuda(const float* a, float* res, const int bs, const int ch, const int w, const int h);
+
+void add_cuda(const float* a, const float* b, float* c, int asize, int bsize);
+void sub_cuda(const float* a, const float* b, float* c, int asize, int bsize);
+void mul_cuda(const float* a, const float* b, float* c, int asize, int bsize);
+void div_cuda(const float* a, const float* b, float* c, int asize, int bsize);
 void pow_cuda(const float* a, const float* exp, float* c, int size);
 void pow_const_cuda(const float* a, const float exp, float* c, int size);
 void log_cuda(const float* a, float* b, int size);
 void sqrt_cuda(const float* a, float* b, int size);
+void exp_cuda(const float* a, float* b, int size);
+
+void relu_cuda(const float* a, float* b, int size);
 
 #endif

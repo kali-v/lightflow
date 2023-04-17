@@ -148,7 +148,7 @@ void Tensor::add_grad(const Tensor grad) {
         auto gradib = this->grad_->data_.begin();
         std::transform(gradib, this->grad_->data_.end(), grad.data_.begin(), gradib, std::plus<float>());
     } else {
-        add_cuda(this->grad_->cu_data_, grad.cu_data_, this->grad_->cu_data_, grad.size());
+        add_cuda(this->grad_->cu_data_, grad.cu_data_, this->grad_->cu_data_, this->grad_->size(), grad.size());
     }
 }
 
@@ -212,7 +212,8 @@ Tensor Tensor::operator+(float value) {
 Tensor Tensor::operator+(Tensor& other) {
     Tensor out = (this->device_ == Device::CUDA) ? Tensor(this->shape_, 0.0f, {this, &other}, need_grad(*this, other))
                                                  : apply_operator(other, add);
-    if (this->device_ == Device::CUDA) add_cuda(this->cu_data_, other.cu_data_, out.cu_data_, this->size());
+    if (this->device_ == Device::CUDA)
+        add_cuda(this->cu_data_, other.cu_data_, out.cu_data_, this->size(), other.size());
     if (out.requires_grad_) out.backward_fn_ = add_backward(this, &other, &out);
     return out;
 }
@@ -226,7 +227,8 @@ Tensor Tensor::operator-(float value) {
 Tensor Tensor::operator-(Tensor& other) {
     Tensor out = (this->device_ == Device::CUDA) ? Tensor(this->shape_, 0.0f, {this, &other}, need_grad(*this, other))
                                                  : apply_operator(other, sub);
-    if (this->device_ == Device::CUDA) sub_cuda(this->cu_data_, other.cu_data_, out.cu_data_, this->size());
+    if (this->device_ == Device::CUDA)
+        sub_cuda(this->cu_data_, other.cu_data_, out.cu_data_, this->size(), other.size());
     if (out.requires_grad_) out.backward_fn_ = sub_backward(this, &other, &out);
     return out;
 }
@@ -240,7 +242,8 @@ Tensor Tensor::operator*(float value) {
 Tensor Tensor::operator*(Tensor& other) {
     Tensor out = (this->device_ == Device::CUDA) ? Tensor(this->shape_, 0.0f, {this, &other}, need_grad(*this, other))
                                                  : apply_operator(other, mul);
-    if (this->device_ == Device::CUDA) mul_cuda(this->cu_data_, other.cu_data_, out.cu_data_, this->size());
+    if (this->device_ == Device::CUDA)
+        mul_cuda(this->cu_data_, other.cu_data_, out.cu_data_, this->size(), other.size());
     if (out.requires_grad_) out.backward_fn_ = mul_backward(this, &other, &out);
     return out;
 }
@@ -254,7 +257,8 @@ Tensor Tensor::operator/(float value) {
 Tensor Tensor::operator/(Tensor& other) {
     Tensor out = (this->device_ == Device::CUDA) ? Tensor(this->shape_, 0.0f, {this, &other}, need_grad(*this, other))
                                                  : apply_operator(other, ddiv);
-    if (this->device_ == Device::CUDA) div_cuda(this->cu_data_, other.cu_data_, out.cu_data_, this->size());
+    if (this->device_ == Device::CUDA)
+        div_cuda(this->cu_data_, other.cu_data_, out.cu_data_, this->size(), other.size());
     if (out.requires_grad_) out.backward_fn_ = ddiv_backward(this, &other, &out);
     return out;
 }
@@ -429,28 +433,14 @@ Tensor Tensor::reshape(DimVec new_shape) {
 }
 
 Tensor Tensor::transpose() {
-    check_cpu(__func__, this->device_);
-
-    DimVec trans_shape = {this->shape_[0], this->shape_[1], this->dshape_[1], this->dshape_[0]};
-
-    Vec1D trans_data(this->data_.size());
-    int theight = this->dshape_[1];
-    int twidth = this->dshape_[0];
-
-#pragma omp parallel for
-    for (int n = 0; n < this->shape_[0]; n++) {
-        int boh = n * this->shape_[1] * theight * twidth;
-        for (int c = 0; c < this->shape_[1]; c++) {
-            int tof = boh + c * theight * twidth;
-            for (int i = 0; i < theight; i++) {
-                for (int j = 0; j < twidth; j++) {
-                    trans_data[tof + i * twidth + j] = this->data_[tof + j * theight + i];
-                }
-            }
-        }
+    if (this->device_ == Device::CUDA) {
+        Tensor out = Tensor({this->shape_[0], this->shape_[1], this->dshape_[1], this->dshape_[0]}, 0.0f);
+        transpose_cuda(this->cu_data_, out.cu_data_, this->shape_[0], this->shape_[1], this->shape_[2],
+                       this->shape_[3]);
+        return out;
+    } else {
+        return transpose_cpu(*this);
     }
-
-    return Tensor(trans_shape, trans_data);
 }
 
 Tensor Tensor::get_block(int n) {
@@ -482,6 +472,8 @@ void Tensor::add_channel(const Tensor& channel) {
 }
 
 Tensor Tensor::correlate(Tensor& filter, DimVec stride, DimVec padding) {
+    check_cpu(__func__, this->device_);
+
     if (this->shape_[1] != filter.shape_[1]) {
         throw std::logic_error("correlate: Wrong shape of tensors at correlation\n x: " + this->to_string() +
                                "\n and \n filter: " + filter.to_string() + "\n");

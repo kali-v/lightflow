@@ -213,25 +213,25 @@ std::function<void()> maxpool2d_backward(Tensor* x, Tensor* out, std::vector<int
 
 std::function<void()> l2_backward(Tensor* pred, Tensor* target) {
     return [pred, target]() {
-        Tensor grad_tensor = (*pred - *target) * 2;
-        pred->add_grad(grad_tensor.data_);
-        target->add_grad(grad_tensor.data_);
+        Tensor grad_tensor = (*pred - *target) * Tensor::scalar(2);
+        pred->add_grad(grad_tensor);
+        target->add_grad(grad_tensor);
     };
 }
 
 std::function<void()> softmax_cross_entropy_backward(Tensor* pred, Tensor* target) {
     return [pred, target]() {
         Tensor grad_tensor = *pred - *target;
-        pred->add_grad(grad_tensor.data_);
-        target->add_grad(grad_tensor.data_);
+        pred->add_grad(grad_tensor);
+        target->add_grad(grad_tensor);
     };
 }
 
 std::function<void()> cross_entropy_backward(Tensor* pred, Tensor* target) {
     return [pred, target]() {
         Tensor grad_tensor = (*pred - *target) * 2;
-        pred->add_grad(grad_tensor.data_);
-        target->add_grad(grad_tensor.data_);
+        pred->add_grad(grad_tensor);
+        target->add_grad(grad_tensor);
     };
 }
 
@@ -260,9 +260,9 @@ std::function<void()> leaky_relu_backward(Tensor* x, Tensor* out, float negative
 
 std::function<void()> sigmoid_backward(Tensor* x, Tensor* out) {
     return [x, out]() {
-        Tensor nx = *x * -1;
+        Tensor nx = *x * Tensor::scalar(-1);
         Tensor enx = Tensor(nx.dshape_, std::exp(1.0f)).pow(nx);
-        Tensor den = (enx + 1).pow(2);
+        Tensor den = (enx + 1).pow(Tensor::scalar(2));
         Tensor grad = enx / den * *out->grad_;
         x->add_grad(grad.data_);
     };

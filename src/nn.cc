@@ -11,6 +11,8 @@
 float uniform_random() { return (float)rand() / RAND_MAX; }
 
 void xavier_normal_init(Tensor* weights) {
+    check_cpu(__func__, weights->device_);
+
     float fan_in = (float)weights->dshape_[0];
     float fan_out = (float)weights->dshape_[1];
     float stdev = std::sqrt(2 / (fan_in + fan_out));

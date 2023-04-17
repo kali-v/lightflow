@@ -8,4 +8,6 @@ void _matmul_deep_cpu(Tensor& a, Tensor& b, float* res, MatmulFunc mm);
 
 Tensor correlate_cpu(Tensor& x, Tensor& filter, DimVec stride, DimVec padding);
 
+Tensor transpose_cpu(Tensor& a);
+
 #endif

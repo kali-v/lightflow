@@ -21,10 +21,23 @@ __global__ void add_kernel(const float* a, const float* b, float* c, int size) {
     }
 }
 
+__global__ void add_const_kernel(const float* a, const float* b, float* c, int size) {
+    int i = threadIdx.x + blockIdx.x * blockDim.x;
+    if (i < size) {
+        c[i] = a[i] + b[0];
+    }
+}
+
 __global__ void sub_kernel(const float* a, const float* b, float* c, int size) {
     int i = threadIdx.x + blockIdx.x * blockDim.x;
     if (i < size) {
         c[i] = a[i] - b[i];
+    }
+}
+__global__ void sub_const_kernel(const float* a, const float* b, float* c, int size) {
+    int i = threadIdx.x + blockIdx.x * blockDim.x;
+    if (i < size) {
+        c[i] = a[i] - b[0];
     }
 }
 
@@ -34,11 +47,23 @@ __global__ void mul_kernel(const float* a, const float* b, float* c, int size) {
         c[i] = a[i] * b[i];
     }
 }
+__global__ void mul_const_kernel(const float* a, const float* b, float* c, int size) {
+    int i = threadIdx.x + blockIdx.x * blockDim.x;
+    if (i < size) {
+        c[i] = a[i] * b[0];
+    }
+}
 
 __global__ void div_kernel(const float* a, const float* b, float* c, int size) {
     int i = threadIdx.x + blockIdx.x * blockDim.x;
     if (i < size) {
         c[i] = a[i] / b[i];
+    }
+}
+__global__ void div_const_kernel(const float* a, const float* b, float* c, int size) {
+    int i = threadIdx.x + blockIdx.x * blockDim.x;
+    if (i < size) {
+        c[i] = a[i] / b[0];
     }
 }
 
@@ -49,6 +74,18 @@ __global__ void sqrt_kernel(const float* a, float* b, int size) {
     }
 }
 
+__global__ void exp_kernel(const float* a, float* b, int size) {
+    int i = threadIdx.x + blockIdx.x * blockDim.x;
+    if (i < size) {
+        b[i] = __expf(a[i]);
+    }
+}
+__global__ void relu_kernel(const float* a, float* b, int size) {
+    int i = threadIdx.x + blockIdx.x * blockDim.x;
+    if (i < size) {
+        b[i] = a[i] > 0 ? a[i] : 0;
+    }
+}
 __global__ void log_kernel(const float* a, float* b, int size) {
     int i = threadIdx.x + blockIdx.x * blockDim.x;
     if (i < size) {
@@ -114,28 +151,56 @@ __global__ void matmul_deep_cuda_kernel(const float* a, const float* b, float* c
     }
 }
 
-void add_cuda(const float* a, const float* b, float* c, int size) {
-    int block_size = 256;
-    int num_blocks = (size + block_size - 1) / block_size;
-    add_kernel<<<num_blocks, block_size>>>(a, b, c, size);
+__global__ void transpose_kernel(const float* a, float* res, int bs, int ch, int h, int w) {
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    int stride = blockDim.x * gridDim.x;
+
+    for (int n = tid; n < bs; n += stride) {
+        for (int c = 0; c < ch; c++) {
+            int tof = (n * ch + c) * h * w;
+            for (int i = 0; i < h; i++) {
+                for (int j = 0; j < w; j++) {
+                    res[tof + j * h + i] = a[tof + i * w + j];
+                }
+            }
+        }
+    }
 }
 
-void sub_cuda(const float* a, const float* b, float* c, int size) {
+void add_cuda(const float* a, const float* b, float* c, int asize, int bsize) {
     int block_size = 256;
-    int num_blocks = (size + block_size - 1) / block_size;
-    sub_kernel<<<num_blocks, block_size>>>(a, b, c, size);
+    int num_blocks = (asize + block_size - 1) / block_size;
+    if (bsize == 1)
+        add_const_kernel<<<num_blocks, block_size>>>(a, b, c, asize);
+    else
+        add_kernel<<<num_blocks, block_size>>>(a, b, c, asize);
 }
 
-void mul_cuda(const float* a, const float* b, float* c, int size) {
+void sub_cuda(const float* a, const float* b, float* c, int asize, int bsize) {
     int block_size = 256;
-    int num_blocks = (size + block_size - 1) / block_size;
-    mul_kernel<<<num_blocks, block_size>>>(a, b, c, size);
+    int num_blocks = (asize + block_size - 1) / block_size;
+    if (bsize == 1)
+        sub_const_kernel<<<num_blocks, block_size>>>(a, b, c, asize);
+    else
+        sub_kernel<<<num_blocks, block_size>>>(a, b, c, asize);
 }
 
-void div_cuda(const float* a, const float* b, float* c, int size) {
+void mul_cuda(const float* a, const float* b, float* c, int asize, int bsize) {
     int block_size = 256;
-    int num_blocks = (size + block_size - 1) / block_size;
-    div_kernel<<<num_blocks, block_size>>>(a, b, c, size);
+    int num_blocks = (asize + block_size - 1) / block_size;
+    if (bsize == 1)
+        mul_const_kernel<<<num_blocks, block_size>>>(a, b, c, asize);
+    else
+        mul_kernel<<<num_blocks, block_size>>>(a, b, c, asize);
+}
+
+void div_cuda(const float* a, const float* b, float* c, int asize, int bsize) {
+    int block_size = 256;
+    int num_blocks = (asize + block_size - 1) / block_size;
+    if (bsize == 1)
+        div_const_kernel<<<num_blocks, block_size>>>(a, b, c, asize);
+    else
+        div_kernel<<<num_blocks, block_size>>>(a, b, c, asize);
 }
 
 void pow_const_cuda(const float* a, const float exp, float* c, int size) {
@@ -160,6 +225,18 @@ void log_cuda(const float* a, float* b, int size) {
     int block_size = 256;
     int num_blocks = (size + block_size - 1) / block_size;
     log_kernel<<<num_blocks, block_size>>>(a, b, size);
+}
+
+void exp_cuda(const float* a, float* b, int size) {
+    int block_size = 256;
+    int num_blocks = (size + block_size - 1) / block_size;
+    exp_kernel<<<num_blocks, block_size>>>(a, b, size);
+}
+
+void relu_cuda(const float* a, float* b, int size) {
+    int block_size = 256;
+    int num_blocks = (size + block_size - 1) / block_size;
+    relu_kernel<<<num_blocks, block_size>>>(a, b, size);
 }
 
 bool compare_arrays_cuda(const float* a, const float* b, const float threshold, const int size) {
@@ -197,4 +274,11 @@ void matmul_deep_cuda(const float* a, const float* b, float* res, const int ah, 
     int c_size = ah * bw;
 
     matmul_deep_cuda_kernel<<<grids, blocks>>>(a, b, res, ah, aw, bw, ch, bs, a_size, b_size, c_size);
+}
+
+void transpose_cuda(const float* a, float* res, const int bs, const int ch, const int h, const int w) {
+    int threads_per_block = 256;
+    int num_blocks = (bs + threads_per_block - 1) / threads_per_block;
+
+    transpose_kernel<<<num_blocks, threads_per_block>>>(a, res, bs, ch, h, w);
 }
