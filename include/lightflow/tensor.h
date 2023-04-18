@@ -27,13 +27,13 @@ void check_cpu(const char* fc_name, const Device device);
 
 class Tensor {
   private:
-    std::size_t size() const;
     void check_same_shape(Tensor& other, bool allow_scalar = true) const;
     DimVec get_short_shape() const;
 
     void _matmul_deep(Tensor& other, float* res, MatmulFunc matmul_fn);
 
   public:
+    std::size_t size() const;
     Vec1D data_;
     DimVec shape_;
     DimVec dshape_;
@@ -69,8 +69,8 @@ class Tensor {
 
     static DimVec normalize_shape(const DimVec shape);
 
-    static Tensor scalar(float value);
-    static Tensor scalar(int value);
+    static Tensor& scalar(float value);
+    static Tensor& scalar(int value);
 
     static Tensor random(DimVec shape, float from = 0, float to = 1);
 
@@ -90,6 +90,7 @@ class Tensor {
     Tensor pow(Tensor& other);
     Tensor pow(float other);
     Tensor sqrt();
+    Tensor log();
 
     Tensor reshape(DimVec new_shape);
     Tensor transpose();
@@ -115,8 +116,9 @@ class Tensor {
     void fill(const Vec2D& data);
 
     void add_grad(Vec1D grad);
-    void set_grad(Vec1D grad);
+    void add_grad(const Tensor grad);
 
+    void set_grad(Vec1D grad);
     void set_grad(Tensor* grad);
 
     bool has_same_shape(Tensor& other);

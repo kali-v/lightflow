@@ -27,6 +27,22 @@ void matmul_cpu(float* a, float* b, float* c, int ah, int aw, int bw) {
     }
 }
 
+void _matmul_deep_cpu(Tensor& a, Tensor& b, float* res, MatmulFunc mm) {
+    int a_size = a.dshape_[0] * a.dshape_[1];
+    int b_size = b.dshape_[0] * b.dshape_[1];
+    int c_size = a.dshape_[0] * b.dshape_[1];
+
+    for (int b0 = 0; b0 < a.shape_[0]; b0++) {
+        for (int b1 = 0; b1 < a.shape_[1]; b1++) {
+            int tof = b0 * a.shape_[1] * a_size + b1 * a_size;
+            int oof = b0 * b.shape_[1] * b_size + b1 * b_size;
+            int rof = b0 * b.shape_[1] * c_size + b1 * c_size;
+
+            mm(&a.data_[tof], &b.data_[oof], &res[rof], a.dshape_[0], a.dshape_[1], b.dshape_[1]);
+        }
+    }
+}
+
 Tensor correlate_cpu(Tensor& x, Tensor& filter, DimVec stride, DimVec padding) {
     int fil_height = filter.dshape_[0];
     int fil_width = filter.dshape_[1];
@@ -68,18 +84,24 @@ Tensor correlate_cpu(Tensor& x, Tensor& filter, DimVec stride, DimVec padding) {
     return res;
 }
 
-void _matmul_deep_cpu(Tensor& a, Tensor& b, float* res, MatmulFunc mm) {
-    int a_size = a.dshape_[0] * a.dshape_[1];
-    int b_size = b.dshape_[0] * b.dshape_[1];
-    int c_size = a.dshape_[0] * b.dshape_[1];
+Tensor transpose_cpu(Tensor& a) {
+    Tensor out = Tensor({a.shape_[0], a.shape_[1], a.dshape_[1], a.dshape_[0]}, 0.0f);
 
-    for (int b0 = 0; b0 < a.shape_[0]; b0++) {
-        for (int b1 = 0; b1 < a.shape_[1]; b1++) {
-            int tof = b0 * a.shape_[1] * a_size + b1 * a_size;
-            int oof = b0 * b.shape_[1] * b_size + b1 * b_size;
-            int rof = b0 * b.shape_[1] * c_size + b1 * c_size;
+    int theight = a.dshape_[1];
+    int twidth = a.dshape_[0];
 
-            mm(&a.data_[tof], &b.data_[oof], &res[rof], a.dshape_[0], a.dshape_[1], b.dshape_[1]);
+#pragma omp parallel for
+    for (int n = 0; n < a.shape_[0]; n++) {
+        int boh = n * a.shape_[1] * theight * twidth;
+        for (int c = 0; c < a.shape_[1]; c++) {
+            int tof = boh + c * theight * twidth;
+            for (int k = 0; k < theight * twidth; k++) {
+                int i = k / twidth;
+                int j = k % twidth;
+                out.data_[tof + i * twidth + j] = a.data_[tof + j * theight + i];
+            }
         }
     }
+
+    return out;
 }

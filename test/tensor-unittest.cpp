@@ -86,15 +86,15 @@ TEST(TENSOR_OPERATIONS, Sub) {
 }
 
 TEST(TENSOR_OPERATIONS, Mul) {
-    vector<vector<float>> examples = {{2.0, 3.0, 4.0, 5.0}, {2.0, 3.0, 4.0, 5.0}, {-15.4, 4.6}, {5.0}, {0}, {0}};
+    Vec2D examples = {{2.0, 3.0, 4.0, 5.0}, {2.0, 3.0, 4.0, 5.0}, {-15.4, 4.6}, {5.0, 5.0}, {0}, {0}};
 
-    vector<vector<float>> results = {{4, 9, 16, 25}, {-77, 23}, {0}};
+    Vec2D results = {{4, 9, 16, 25}, {-77, 23}, {0}};
 
     for (int i = 0; i < examples.size(); i += 2) {
         const int max_tsize = std::max((int)examples[i].size(), (int)examples[i + 1].size());
 
-        Tensor a = Tensor({(int)examples[i].size()}, (vector<float>)examples[i]);
-        Tensor b = Tensor({(int)examples[i + 1].size()}, (vector<float>)examples[i + 1]);
+        Tensor a = Tensor({(int)examples[i].size()}, examples[i]);
+        Tensor b = Tensor({(int)examples[i + 1].size()}, examples[i + 1]);
 
         Tensor computed = a * b;
         Tensor expected = Tensor({max_tsize}, results[(int)i / 2]);
@@ -106,7 +106,7 @@ TEST(TENSOR_OPERATIONS, Mul) {
 
 TEST(TENSOR_OPERATIONS, Div) {
     vector<vector<float>> examples = {
-        {2.0, 3.0, 4.0, 6.0}, {2.0, 3.0, -4.0, 5.0}, {-15.4, 4.6}, {5.0}, {23.21343}, {1.3123}};
+        {2.0, 3.0, 4.0, 6.0}, {2.0, 3.0, -4.0, 5.0}, {-15.4, 4.6}, {5.0, 5.0}, {23.21343}, {1.3123}};
 
     vector<vector<float>> results = {{1, 1, -1, 1.2}, {-3.08, 0.92}, {17.6891}};
 
@@ -253,7 +253,7 @@ TEST(GRAD, Add_1) {
 TEST(GRAD, Operations_1) {
     Tensor a = Tensor({1}, 5, {}, true);
     Tensor b = Tensor({1}, 3.1, {}, true);
-    Tensor c = Tensor({1}, 2, {}, true);
+    Tensor c = Tensor({1}, 2.0, {}, true);
     Tensor d = Tensor({1}, 3.2, {}, true);
     Tensor e = Tensor({1}, 11.86, {}, true);
     Tensor f = Tensor({1}, 1.23, {}, true);
@@ -416,7 +416,7 @@ TEST(GRAD, Linear_1) {
     Sequential seq = Sequential({l, ll});
     Tensor z = seq(x);
 
-    z.grad_->data_ = {1};
+    z.grad_->fill(1.0f);
     z.backward();
 
     std::vector<Tensor> exp_tensors = {
@@ -446,7 +446,7 @@ TEST(GRAD, LinearRelu_1) {
     Sequential seq = Sequential({l, new ReLU(), ll});
     Tensor out = seq(x);
 
-    out.grad_->fill(1);
+    out.grad_->fill(1.0f);
     out.backward();
 
     std::vector<Tensor> exp_tensors = {
@@ -455,8 +455,6 @@ TEST(GRAD, LinearRelu_1) {
         Tensor({1, 2}, {4.48, 0}),
         Tensor({1, 1}, {1.0f}),
     };
-
-    Tensor q = l->weight_->grad();
 
     std::vector<Tensor> com_tensors = {l->weight_->grad(), *l->bias_->grad_, ll->weight_->grad(), *ll->bias_->grad_};
 
@@ -514,7 +512,7 @@ TEST(HIGHDIM_TENSOR_OPERATIONS, HighDimMatmul) {
         Tensor computed = a.matmul(b);
 
         Tensor expected = results[i / 2];
-        
+
         ASSERT_TRUE(computed == expected) << std::to_string(i) << " tensor; expected:\n"
                                           << expected.to_string() << "; got:\n" + computed.to_string();
     }

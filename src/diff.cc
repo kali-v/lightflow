@@ -5,48 +5,53 @@
 
 #include "tensor.h"
 
+#ifdef LF_CUDA_AVAIL
+#include "accel/cuda.cuh"
+#include "cuda_runtime.h"
+#endif
+
 std::function<void()> add_backward(Tensor* a, Tensor* b, Tensor* out) {
     return [a, b, out]() {
-        a->add_grad(out->grad_->data_);
-        b->add_grad(out->grad_->data_);
+        a->add_grad(*out->grad_);
+        b->add_grad(*out->grad_);
     };
 }
 
 std::function<void()> sub_backward(Tensor* a, Tensor* b, Tensor* out) {
     return [a, b, out]() {
-        a->add_grad(out->grad_->data_);
-        b->add_grad((*out->grad_ * -1).data_);
+        a->add_grad(*out->grad_);
+        b->add_grad(*out->grad_ * Tensor::scalar(-1));
     };
 }
 
 std::function<void()> mul_backward(Tensor* a, Tensor* b, Tensor* out) {
     return [a, b, out]() {
-        a->add_grad((*b * *out->grad_).data_);
-        b->add_grad((*a * *out->grad_).data_);
+        a->add_grad(*b * *out->grad_);
+        b->add_grad(*a * *out->grad_);
     };
 }
 
 std::function<void()> ddiv_backward(Tensor* a, Tensor* b, Tensor* out) {
     return [a, b, out]() {
         Tensor a_grad_tensor = b->pow(-1);
-
         Tensor pow_tensor = b->pow(2);
-        Tensor b_grad_tensor = *a / pow_tensor * -1;
+        Tensor b_grad_tensor = *a / pow_tensor * Tensor::scalar(-1);
 
-        a->add_grad((a_grad_tensor * *out->grad_).data_);
-        b->add_grad((b_grad_tensor * *out->grad_).data_);
+        a->add_grad(a_grad_tensor * *out->grad_);
+        b->add_grad(b_grad_tensor * *out->grad_);
     };
 }
 
 std::function<void()> pow_backward(Tensor* a, Tensor* exp, Tensor* out) {
     return [a, exp, out]() {
-        Tensor a_grad_tensor = (*exp * *a).pow(exp->data_[0] - 1);
+        Tensor sub_exp = *exp - Tensor::scalar(1);
+        Tensor a_grad_tensor = (*exp * *a).pow(sub_exp);
 
-        Tensor log_tensor = a->apply((float (*)(float))std::log);
-        Tensor pow_tensor = a->pow(exp->data_[0]);
+        Tensor log_tensor = a->log();
+        Tensor pow_tensor = a->pow(*exp);
 
-        a->add_grad((a_grad_tensor * *out->grad_).data_);
-        exp->add_grad((log_tensor * pow_tensor * *out->grad_).data_);
+        a->add_grad(a_grad_tensor * *out->grad_);
+        exp->add_grad(log_tensor * pow_tensor * *out->grad_);
     };
 }
 
@@ -55,14 +60,14 @@ std::function<void()> matmul_backward(Tensor* a, Tensor* b, Tensor* out) {
         Tensor a_trans = a->transpose();
         Tensor b_trans = b->transpose();
 
-        a->add_grad((out->grad_->matmul(b_trans)).data_);
-        b->add_grad((a_trans.matmul(*out->grad_)).data_);
+        a->add_grad(out->grad_->matmul(b_trans));
+        b->add_grad(a_trans.matmul(*out->grad_));
     };
 }
 
 std::function<void()> channelwise_sum_backward(Tensor* a, Tensor* b, Tensor* out) {
     return [a, b, out]() {
-        a->add_grad(out->grad_->data_);
+        a->add_grad(*out->grad_);
 
         Vec1D grad(b->data_.size(), 0.0f);
         int out_wh = out->shape_[2] * out->shape_[3];
@@ -71,7 +76,7 @@ std::function<void()> channelwise_sum_backward(Tensor* a, Tensor* b, Tensor* out
                 grad[c] += out->grad_->data_[c * out_wh + i];
             }
         }
-        b->add_grad(grad);
+        b->add_grad(Tensor(b->shape_, grad));
     };
 }
 
@@ -213,57 +218,76 @@ std::function<void()> maxpool2d_backward(Tensor* x, Tensor* out, std::vector<int
 
 std::function<void()> l2_backward(Tensor* pred, Tensor* target) {
     return [pred, target]() {
-        Tensor grad_tensor = (*pred - *target) * 2;
-        pred->add_grad(grad_tensor.data_);
-        target->add_grad(grad_tensor.data_);
+        Tensor grad_tensor = (*pred - *target) * Tensor::scalar(2);
+        pred->add_grad(grad_tensor);
+        target->add_grad(grad_tensor);
     };
 }
 
 std::function<void()> softmax_cross_entropy_backward(Tensor* pred, Tensor* target) {
     return [pred, target]() {
         Tensor grad_tensor = *pred - *target;
-        pred->add_grad(grad_tensor.data_);
-        target->add_grad(grad_tensor.data_);
+        pred->add_grad(grad_tensor);
+        target->add_grad(grad_tensor);
     };
 }
 
 std::function<void()> cross_entropy_backward(Tensor* pred, Tensor* target) {
     return [pred, target]() {
         Tensor grad_tensor = (*pred - *target) * 2;
-        pred->add_grad(grad_tensor.data_);
-        target->add_grad(grad_tensor.data_);
+        pred->add_grad(grad_tensor);
+        target->add_grad(grad_tensor);
     };
 }
 
 std::function<void()> relu_backward(Tensor* x, Tensor* out) {
     return [x, out]() {
-        std::vector<float> data;
-        for (std::size_t i = 0; i < x->data_.size(); i++) {
-            data.push_back((x->data_[i] > 0) * out->grad_->data_[i]);
+        if (x->device_ == Device::CPU) {
+            std::vector<float> data;
+            for (std::size_t i = 0; i < x->size(); i++) {
+                data.push_back((x->data_[i] > 0) * out->grad_->data_[i]);
+            }
+            x->add_grad(data);
+        } else {
+#ifdef LF_CUDA_AVAIL
+            Tensor grad = Tensor(x->shape_, 0.0f);
+            relu_backward_cuda(x->cu_data_, out->grad_->cu_data_, grad.cu_data_, x->size());
+            x->add_grad(grad);
+#else
+            throw std::runtime_error("CUDA not available");
+#endif
         }
-
-        x->add_grad(data);
     };
 }
 
 std::function<void()> leaky_relu_backward(Tensor* x, Tensor* out, float negative_slope) {
     return [x, out, negative_slope]() {
-        std::vector<float> data(x->data_.size());
-        for (std::size_t i = 0; i < x->data_.size(); i++) {
-            float slope = (x->data_[i] > 0) ? 1 : negative_slope;
-            data[i] = slope * out->grad_->data_[i];
-        }
+        if (x->device_ == Device::CPU) {
 
-        x->add_grad(data);
+            std::vector<float> data(x->data_.size());
+            for (std::size_t i = 0; i < x->data_.size(); i++) {
+                float slope = (x->data_[i] > 0) ? 1 : negative_slope;
+                data[i] = slope * out->grad_->data_[i];
+            }
+            x->add_grad(data);
+        } else {
+#ifdef LF_CUDA_AVAIL
+            Tensor grad = Tensor(x->shape_, 0.0f);
+            leaky_relu_backward_cuda(x->cu_data_, out->grad_->cu_data_, grad.cu_data_, negative_slope, x->size());
+            x->add_grad(grad);
+#else
+            throw std::runtime_error("CUDA not available");
+#endif
+        }
     };
 }
 
 std::function<void()> sigmoid_backward(Tensor* x, Tensor* out) {
     return [x, out]() {
-        Tensor nx = *x * -1;
+        Tensor nx = *x * Tensor::scalar(-1);
         Tensor enx = Tensor(nx.dshape_, std::exp(1.0f)).pow(nx);
-        Tensor den = (enx + 1).pow(2);
+        Tensor den = (enx + Tensor::scalar(1)).pow(Tensor::scalar(2));
         Tensor grad = enx / den * *out->grad_;
-        x->add_grad(grad.data_);
+        x->add_grad(grad);
     };
 }

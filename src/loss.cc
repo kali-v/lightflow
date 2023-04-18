@@ -33,10 +33,8 @@ Tensor softmax_cross_entropy_loss(Tensor* pred, Tensor* target) {
     return out;
 }
 
-Tensor cross_entropy_loss(Tensor* pred, Tensor* target, bool used_softmax) {
-    check_cpu(__func__, pred->device_);
-
-    Tensor log_tensor = pred->apply((float (*)(float))std::log);
+Tensor cross_entropy_loss(Tensor* pred, Tensor* target) {
+    Tensor log_tensor = pred->log();
     Tensor mul_tensor = *target * *pred;
 
     Tensor out = Tensor({1, 1}, mul_tensor.sum() * -1, {pred, target}, true);
@@ -46,8 +44,6 @@ Tensor cross_entropy_loss(Tensor* pred, Tensor* target, bool used_softmax) {
 }
 
 Tensor l2_loss(Tensor* pred, Tensor* target) {
-    check_cpu(__func__, pred->device_);
-
     check_same_dims(pred, target);
 
     Tensor diff_tensor = *pred - *target;

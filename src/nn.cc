@@ -5,12 +5,20 @@
 #include <random>
 
 #include "config.h"
+#include "cpu.h"
 #include "diff.h"
 #include "loss.h"
+
+#ifdef LF_CUDA_AVAIL
+#include "accel/cuda.cuh"
+#include "cuda_runtime.h"
+#endif
 
 float uniform_random() { return (float)rand() / RAND_MAX; }
 
 void xavier_normal_init(Tensor* weights) {
+    check_cpu(__func__, weights->device_);
+
     float fan_in = (float)weights->dshape_[0];
     float fan_out = (float)weights->dshape_[1];
     float stdev = std::sqrt(2 / (fan_in + fan_out));
@@ -64,10 +72,8 @@ Tensor* Module::forward(Tensor* x) { return x; }
 std::vector<Tensor*> Module::parameters() { return {}; }
 
 Linear::Linear(int in_features, int out_features)
-    : in_features_(in_features), out_features_(out_features), bias_(new Tensor({1, out_features}, .1f, {}, true)) {
-    Tensor weight_tensor = Tensor({out_features, in_features}, 0.0f, {}, true);
-    this->weight_ = new Weight(weight_tensor);
-}
+    : in_features_(in_features), out_features_(out_features), bias_(new Tensor({1, out_features}, .1f, {}, true)),
+      weight_(new Weight(Tensor({out_features, in_features}, 0.0f, {}, true))) {}
 
 Linear::~Linear() {
     delete this->bias_;
@@ -181,13 +187,20 @@ Tensor* Flatten::forward(Tensor* x) {
 LeakyReLU::LeakyReLU(float negative_slope) : negative_slope_(negative_slope) {}
 
 Tensor* LeakyReLU::forward(Tensor* x) {
-    Vec1D res_data(x->data_.size());
-    for (std::size_t i = 0; i < x->data_.size(); i++) {
-        res_data[i] = leaky_relu(x->data_[i], this->negative_slope_);
-    };
+    float neg_slope = this->negative_slope_;
 
-    Tensor* res_tensor = new Tensor(x->shape_, res_data, {x}, x->requires_grad_);
-    res_tensor->backward_fn_ = leaky_relu_backward(x, res_tensor, this->negative_slope_);
+    Tensor* res_tensor = new Tensor(x->shape_, 0.0f, {x}, true);
+    res_tensor->backward_fn_ = leaky_relu_backward(x, res_tensor, neg_slope);
+
+    if (res_tensor->device_ == Device::CPU)
+        std::transform(x->data_.begin(), x->data_.end(), res_tensor->data_.begin(),
+                       [neg_slope](float x) { return leaky_relu_cpu(x, neg_slope); });
+    else
+#ifdef LF_CUDA_AVAIL
+        leaky_relu_cuda(x->cu_data_, res_tensor->cu_data_, neg_slope, x->size());
+#else
+        throw std::runtime_error("CUDA not available");
+#endif
 
     return res_tensor;
 }
@@ -195,9 +208,18 @@ Tensor* LeakyReLU::forward(Tensor* x) {
 ReLU::ReLU() {}
 
 Tensor* ReLU::forward(Tensor* x) {
-    Tensor* res_tensor = new Tensor(x->apply(relu));
-    res_tensor->children_ = {x};
+    Tensor* res_tensor = new Tensor(x->shape_, 0.0f, {x}, true);
     res_tensor->backward_fn_ = relu_backward(x, res_tensor);
+
+    if (res_tensor->device_ == Device::CPU)
+        std::transform(x->data_.begin(), x->data_.end(), res_tensor->data_.begin(),
+                       [](float x) { return relu_cpu(x); });
+    else
+#ifdef LF_CUDA_AVAIL
+        relu_cuda(x->cu_data_, res_tensor->cu_data_, x->size());
+#else
+        throw std::runtime_error("CUDA not available");
+#endif
 
     return res_tensor;
 }
@@ -205,9 +227,18 @@ Tensor* ReLU::forward(Tensor* x) {
 Sigmoid::Sigmoid() {}
 
 Tensor* Sigmoid::forward(Tensor* x) {
-    Tensor* res_tensor = new Tensor(x->apply(sigmoid));
-    res_tensor->children_ = {x};
+    Tensor* res_tensor = new Tensor(x->shape_, 0.0f, {x}, true);
     res_tensor->backward_fn_ = sigmoid_backward(x, res_tensor);
+
+    if (res_tensor->device_ == Device::CPU)
+        std::transform(x->data_.begin(), x->data_.end(), res_tensor->data_.begin(),
+                       [](float x) { return sigmoid_cpu(x); });
+    else
+#ifdef LF_CUDA_AVAIL
+        sigmoid_cuda(x->cu_data_, res_tensor->cu_data_, x->size());
+#else
+        throw std::runtime_error("CUDA not available");
+#endif
 
     return res_tensor;
 }
@@ -233,8 +264,6 @@ std::vector<Tensor*> Sequential::parameters() {
 }
 
 Tensor& Sequential::operator()(Tensor& x) {
-    check_cpu(__func__, x.device_);
-
     Tensor* lay_in = &x;
     this->layers_input_.clear();
     this->layers_input_.reserve(this->layers_.size());

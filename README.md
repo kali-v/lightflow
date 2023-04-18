@@ -3,7 +3,7 @@
 - Yet another deep learning framework
 - Made for fun, educational purposes, and soon for paperclip maximizing
 - C++, lightweight, no 3rd party libraries required
-- CPU (+ AVX) support, CUDA soon
+- CPU (+ AVX), partial CUDA support
 
 ## Installation
 
