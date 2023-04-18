@@ -249,9 +249,13 @@ std::function<void()> relu_backward(Tensor* x, Tensor* out) {
             }
             x->add_grad(data);
         } else {
+#ifdef LF_CUDA_AVAIL
             Tensor grad = Tensor(x->shape_, 0.0f);
             relu_backward_cuda(x->cu_data_, out->grad_->cu_data_, grad.cu_data_, x->size());
             x->add_grad(grad);
+#else
+            throw std::runtime_error("CUDA not available");
+#endif
         }
     };
 }
@@ -267,9 +271,13 @@ std::function<void()> leaky_relu_backward(Tensor* x, Tensor* out, float negative
             }
             x->add_grad(data);
         } else {
+#ifdef LF_CUDA_AVAIL
             Tensor grad = Tensor(x->shape_, 0.0f);
             leaky_relu_backward_cuda(x->cu_data_, out->grad_->cu_data_, grad.cu_data_, negative_slope, x->size());
             x->add_grad(grad);
+#else
+            throw std::runtime_error("CUDA not available");
+#endif
         }
     };
 }

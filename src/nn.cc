@@ -196,7 +196,11 @@ Tensor* LeakyReLU::forward(Tensor* x) {
         std::transform(x->data_.begin(), x->data_.end(), res_tensor->data_.begin(),
                        [neg_slope](float x) { return leaky_relu_cpu(x, neg_slope); });
     else
+#ifdef LF_CUDA_AVAIL
         leaky_relu_cuda(x->cu_data_, res_tensor->cu_data_, neg_slope, x->size());
+#else
+        throw std::runtime_error("CUDA not available");
+#endif
 
     return res_tensor;
 }
@@ -211,7 +215,11 @@ Tensor* ReLU::forward(Tensor* x) {
         std::transform(x->data_.begin(), x->data_.end(), res_tensor->data_.begin(),
                        [](float x) { return relu_cpu(x); });
     else
+#ifdef LF_CUDA_AVAIL
         relu_cuda(x->cu_data_, res_tensor->cu_data_, x->size());
+#else
+        throw std::runtime_error("CUDA not available");
+#endif
 
     return res_tensor;
 }
@@ -226,7 +234,11 @@ Tensor* Sigmoid::forward(Tensor* x) {
         std::transform(x->data_.begin(), x->data_.end(), res_tensor->data_.begin(),
                        [](float x) { return sigmoid_cpu(x); });
     else
+#ifdef LF_CUDA_AVAIL
         sigmoid_cuda(x->cu_data_, res_tensor->cu_data_, x->size());
+#else
+        throw std::runtime_error("CUDA not available");
+#endif
 
     return res_tensor;
 }

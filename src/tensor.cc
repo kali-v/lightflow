@@ -148,7 +148,11 @@ void Tensor::add_grad(const Tensor grad) {
         auto gradib = this->grad_->data_.begin();
         std::transform(gradib, this->grad_->data_.end(), grad.data_.begin(), gradib, std::plus<float>());
     } else {
+#ifdef LF_CUDA_AVAIL
         add_cuda(this->grad_->cu_data_, grad.cu_data_, this->grad_->cu_data_, this->grad_->size(), grad.size());
+#else
+        throw std::runtime_error("CUDA not available");
+#endif
     }
 }
 
@@ -212,8 +216,13 @@ Tensor Tensor::operator+(float value) {
 Tensor Tensor::operator+(Tensor& other) {
     Tensor out = (this->device_ == Device::CUDA) ? Tensor(this->shape_, 0.0f, {this, &other}, need_grad(*this, other))
                                                  : apply_operator(other, add);
-    if (this->device_ == Device::CUDA)
+    if (this->device_ == Device::CUDA) {
+#ifdef LF_CUDA_AVAIL
         add_cuda(this->cu_data_, other.cu_data_, out.cu_data_, this->size(), other.size());
+#else
+        throw std::runtime_error("CUDA not available");
+#endif
+    }
     if (out.requires_grad_) out.backward_fn_ = add_backward(this, &other, &out);
     return out;
 }
@@ -227,8 +236,13 @@ Tensor Tensor::operator-(float value) {
 Tensor Tensor::operator-(Tensor& other) {
     Tensor out = (this->device_ == Device::CUDA) ? Tensor(this->shape_, 0.0f, {this, &other}, need_grad(*this, other))
                                                  : apply_operator(other, sub);
-    if (this->device_ == Device::CUDA)
+    if (this->device_ == Device::CUDA) {
+#ifdef LF_CUDA_AVAIL
         sub_cuda(this->cu_data_, other.cu_data_, out.cu_data_, this->size(), other.size());
+#else
+        throw std::runtime_error("CUDA not available");
+#endif
+    }
     if (out.requires_grad_) out.backward_fn_ = sub_backward(this, &other, &out);
     return out;
 }
@@ -242,8 +256,13 @@ Tensor Tensor::operator*(float value) {
 Tensor Tensor::operator*(Tensor& other) {
     Tensor out = (this->device_ == Device::CUDA) ? Tensor(this->shape_, 0.0f, {this, &other}, need_grad(*this, other))
                                                  : apply_operator(other, mul);
-    if (this->device_ == Device::CUDA)
+    if (this->device_ == Device::CUDA) {
+#ifdef LF_CUDA_AVAIL
         mul_cuda(this->cu_data_, other.cu_data_, out.cu_data_, this->size(), other.size());
+#else
+        throw std::runtime_error("CUDA not available");
+#endif
+    }
     if (out.requires_grad_) out.backward_fn_ = mul_backward(this, &other, &out);
     return out;
 }
@@ -257,8 +276,13 @@ Tensor Tensor::operator/(float value) {
 Tensor Tensor::operator/(Tensor& other) {
     Tensor out = (this->device_ == Device::CUDA) ? Tensor(this->shape_, 0.0f, {this, &other}, need_grad(*this, other))
                                                  : apply_operator(other, ddiv);
-    if (this->device_ == Device::CUDA)
+    if (this->device_ == Device::CUDA) {
+#ifdef LF_CUDA_AVAIL
         div_cuda(this->cu_data_, other.cu_data_, out.cu_data_, this->size(), other.size());
+#else
+        throw std::runtime_error("CUDA not available");
+#endif
+    }
     if (out.requires_grad_) out.backward_fn_ = ddiv_backward(this, &other, &out);
     return out;
 }
@@ -270,8 +294,12 @@ Tensor Tensor::pow(float exp) {
         std::transform(nd.begin(), nd.end(), nd.begin(), [exp](float& c) { return std::pow(c, exp); });
         out = new Tensor(this->shape_, nd);
     } else {
+#ifdef LF_CUDA_AVAIL
         out = new Tensor(this->shape_, 0.0f);
         pow_const_cuda(this->cu_data_, exp, out->cu_data_, this->size());
+#else
+        throw std::runtime_error("CUDA not available");
+#endif
     }
     return *out;
 }
@@ -284,8 +312,12 @@ Tensor Tensor::pow(Tensor& exp) {
         std::transform(nd.begin(), nd.end(), nd.begin(), [iexp](float& c) { return std::pow(c, iexp); });
         out = new Tensor(this->shape_, nd, {this, &exp}, exp.requires_grad_);
     } else {
+#ifdef LF_CUDA_AVAIL
         out = new Tensor(this->shape_, 0.0f, {this, &exp}, exp.requires_grad_);
         pow_cuda(this->cu_data_, exp.cu_data_, out->cu_data_, this->size());
+#else
+        throw std::runtime_error("CUDA not available");
+#endif
     }
     if (out->requires_grad_) out->backward_fn_ = pow_backward(this, &exp, out);
     return *out;
@@ -351,7 +383,11 @@ Tensor Tensor::log() {
         std::transform(out->data_.begin(), out->data_.end(), out->data_.begin(), (float (*)(float))std::log);
     } else {
         out = new Tensor(this->shape_, 0.0f);
+#ifdef LF_CUDA_AVAIL
         log_cuda(this->cu_data_, out->cu_data_, this->size());
+#else
+        throw std::runtime_error("CUDA not available");
+#endif
     }
     return *out;
 }
@@ -435,8 +471,12 @@ Tensor Tensor::reshape(DimVec new_shape) {
 Tensor Tensor::transpose() {
     if (this->device_ == Device::CUDA) {
         Tensor out = Tensor({this->shape_[0], this->shape_[1], this->dshape_[1], this->dshape_[0]}, 0.0f);
+#ifdef LF_CUDA_AVAIL
         transpose_cuda(this->cu_data_, out.cu_data_, this->shape_[0], this->shape_[1], this->shape_[2],
                        this->shape_[3]);
+#else
+        throw std::runtime_error("CUDA not available");
+#endif
         return out;
     } else {
         return transpose_cpu(*this);
@@ -577,8 +617,12 @@ std::string Tensor::to_string() {
 
     float* tmp_data = &this->data_[0];
     if (this->device_ == Device::CUDA) {
+#ifdef LF_CUDA_AVAIL
         tmp_data = (float*)malloc(this->size() * sizeof(float));
         move_data_to_host(tmp_data, this->cu_data_, this->size());
+#else
+        throw std::runtime_error("CUDA not available");
+#endif
     }
 
     for (size_t i = 0; i < this->size(); i++) {
