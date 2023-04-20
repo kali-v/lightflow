@@ -3,6 +3,8 @@
 
 #ifdef LF_CUDA_AVAIL
 #include "cuda_runtime.h"
+#include <curand.h>
+#include <curand_kernel.h>
 #endif
 
 void move_data_to_cuda(const float* host_ptr, const int size, float** dev_ptr) {
@@ -197,6 +199,16 @@ __global__ void transpose_kernel(const float* a, float* res, int bs, int ch, int
     }
 }
 
+__global__ void xavier_normal_kernel(float* weights, const float stdev, const uint seed, const int size) {
+    curandState_t state;
+    curand_init(seed, threadIdx.x, 0, &state);
+
+    int i = threadIdx.x + blockIdx.x * blockDim.x;
+    if (i < size) {
+        weights[i] = stdev * curand_normal(&state);
+    }
+}
+
 void add_cuda(const float* a, const float* b, float* c, const int asize, const int bsize) {
     int block_size = 256;
     int num_blocks = (asize + block_size - 1) / block_size;
@@ -335,4 +347,10 @@ void transpose_cuda(const float* a, float* res, const int bs, const int ch, cons
     int num_blocks = (bs + threads_per_block - 1) / threads_per_block;
 
     transpose_kernel<<<num_blocks, threads_per_block>>>(a, res, bs, ch, h, w);
+}
+
+void xavier_normal_cuda(float* weights, const float stddev, const int size) {
+    int block_size = 256;
+    int num_blocks = (size + block_size - 1) / block_size;
+    xavier_normal_kernel<<<num_blocks, block_size>>>(weights, stddev, time(NULL), size);
 }
