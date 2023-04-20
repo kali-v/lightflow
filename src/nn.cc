@@ -29,7 +29,11 @@ void xavier_normal_init(Tensor* weights) {
 
         std::generate(weights->data_.begin(), weights->data_.end(), [&]() { return nd(gen); });
     } else {
+#ifdef LF_CUDA_AVAIL
         xavier_normal_cuda(weights->cu_data_, stddev, weights->size());
+#else
+        throw std::runtime_error("CUDA not available");
+#endif
     }
 }
 
