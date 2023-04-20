@@ -28,4 +28,6 @@ void leaky_relu_cuda(const float* a, float* c, const float neg_slope, const int 
 void leaky_relu_backward_cuda(const float* a, const float* b, float* c, float neg_slope, const int size);
 void sigmoid_cuda(const float* a, float* b, const int size);
 
+void xavier_normal_cuda(float* weights, const float stddev, const int size);
+
 #endif

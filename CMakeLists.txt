@@ -15,8 +15,8 @@ if (CMAKE_CUDA_COMPILER)
     find_package(CUDA)
     include_directories("${CUDA_INCLUDE_DIRS}")
     set(CUDA_NVCC_FLAGS "--compiler-options -fPIC -O4")
-    cuda_compile(CUDA_O src/accel/cuda.cu)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DLF_CUDA_AVAIL -lcudart")
+    cuda_compile(CUDA_O src/accel/cuda.cu)
 endif()
 
 set(lightflow_src

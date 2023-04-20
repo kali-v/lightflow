@@ -8,6 +8,7 @@
 #include "cpu.h"
 #include "diff.h"
 #include "loss.h"
+#include "tensor.h"
 
 #ifdef LF_CUDA_AVAIL
 #include "accel/cuda.cuh"
@@ -17,17 +18,23 @@
 float uniform_random() { return (float)rand() / RAND_MAX; }
 
 void xavier_normal_init(Tensor* weights) {
-    check_cpu(__func__, weights->device_);
-
     float fan_in = (float)weights->dshape_[0];
     float fan_out = (float)weights->dshape_[1];
-    float stdev = std::sqrt(2 / (fan_in + fan_out));
+    float stddev = std::sqrt(2 / (fan_in + fan_out));
 
-    std::random_device rd{};
-    std::mt19937 gen{rd()};
-    std::normal_distribution<> nd(0, stdev);
+    if (weights->device_ == Device::CPU) {
+        std::random_device rd{};
+        std::mt19937 gen{rd()};
+        std::normal_distribution<> nd(0, stddev);
 
-    std::generate(weights->data_.begin(), weights->data_.end(), [&]() { return nd(gen); });
+        std::generate(weights->data_.begin(), weights->data_.end(), [&]() { return nd(gen); });
+    } else {
+#ifdef LF_CUDA_AVAIL
+        xavier_normal_cuda(weights->cu_data_, stddev, weights->size());
+#else
+        throw std::runtime_error("CUDA not available");
+#endif
+    }
 }
 
 Weight::Weight(Tensor weight) {
@@ -72,9 +79,12 @@ Tensor* Module::forward(Tensor* x) { return x; }
 std::vector<Tensor*> Module::parameters() { return {}; }
 
 Linear::Linear(int in_features, int out_features)
-    : in_features_(in_features), out_features_(out_features), bias_(new Tensor({1, out_features}, .1f, {}, true)),
-      weight_(new Weight(Tensor({out_features, in_features}, 0.0f, {}, true))) {}
-
+    : in_features_(in_features), out_features_(out_features),
+      bias_(new Tensor({1, out_features, 1, 1}, 0.1f, {}, true)) {
+    Tensor weight_tensor = Tensor({out_features, in_features}, 0.2f, {}, true);
+    xavier_normal_init(&weight_tensor);
+    this->weight_ = new Weight(weight_tensor);
+}
 Linear::~Linear() {
     delete this->bias_;
     delete this->weight_;
@@ -93,6 +103,7 @@ Conv2D::Conv2D(int in_channels, int out_channels, DimVec kernel_size, DimVec str
       padding_(padding), padding_layer_(new Padding(padding)),
       bias_(new Tensor({1, out_channels, 1, 1}, 0.1f, {}, true)) {
     Tensor weight_tensor = Tensor({out_channels, in_channels, kernel_size[0], kernel_size[1]}, 0.0f, {}, true);
+    check_cpu(__func__, weight_tensor.device_);
     xavier_normal_init(&weight_tensor);
     this->weight_ = new Weight(weight_tensor);
 }
